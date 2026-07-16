@@ -121,7 +121,9 @@ Those are combinations of multiple entities.
 
 # Version 1 Entities
 
-The first release of MarketPulse consists of only five core entities.
+The first release of MarketPulse consists of six core entities and one operational table.
+
+---
 
 ## Markets
 
@@ -129,8 +131,11 @@ Represents each official fresh produce market.
 
 Examples:
 
-- Tshwane Market
-- Cape Town Market
+- Tshwane Fresh Produce Market
+- Cape Town Fresh Produce Market
+- Johannesburg Fresh Produce Market
+
+This table changes very rarely.
 
 ---
 
@@ -143,7 +148,9 @@ Examples:
 - Tomato
 - Potato
 - Lemon
-- Strawberry
+- Apple
+
+Products never contain packaging or grades.
 
 ---
 
@@ -157,69 +164,86 @@ Examples:
 - Pocket
 - Crate
 - Punnet
-- BI
-- NN
+
+Containers are referenced by Market Products.
 
 ---
 
 ## Grades
 
-Represents the quality classification used by the market.
+Represents the quality classification used by each market.
 
 Examples:
 
+- Grade A
+- Grade B
 - Class 1
-- Class 2
-- A
-- AA
 - Export
+
+If a market does not use grades, a "NO_GRADE" record should be used instead of NULL values.
+
+---
+
+## Market Products
+
+Represents a permanent tradable product configuration.
+
+A Market Product combines:
+
+- Product
+- Container
+- Grade
+- Mass
+- Unit
+
+Examples:
+
+- Tomato | 7kg Carton | Grade A
+- Potato | 10kg Pocket | Grade 1
+
+These records are permanent and never duplicated.
 
 ---
 
 ## Daily Prices
 
-Represents one published market record for one product configuration on one day.
+Represents the daily statistics published by each market.
 
-This table stores the changing market information.
+Each record belongs to:
+
+- one Market
+- one Market Product
+- one Market Date
+
+Daily Prices contain information such as:
+
+- Lowest Price
+- Average Price
+- Highest Price
+- Opening Quantity
+- Quantity Sold
+- Quantity On Hand
+- Total Mass
+- Total Sales
+
+This is the largest table in the database and forms the historical market intelligence dataset.
+
+---
+
+## Scrape Runs
+
+Stores operational information about every automated data collection process.
 
 Examples include:
 
-- Market
+- Market scraped
 - Date
-- Product
-- Container
-- Grade
-- Mass
-- Lowest Price
-- Highest Price
-- Average Price
-- Opening Balance
-- Quantity Sold
-- Quantity On Hand
+- Status
+- Records imported
+- Runtime
+- Errors
 
----
-
-# Data Relationships
-
-Markets
-    ↓
-
-Daily Prices
-
-    ↓
-
-Products
-
-    ↓
-
-Containers
-
-    ↓
-
-Grades
-
----
-
+This table is used for monitoring, auditing and troubleshooting the scraping system.
 # Long-Term Vision
 
 MarketPulse is not intended to become another market website.
@@ -253,14 +277,14 @@ If the answer is no, it probably does not belong in the database.
 
 Markets
     │
-    ▼
-Daily Prices
+    ├──────────────┐
+    │              │
+    ▼              ▼
+Daily Prices   Scrape Runs
     ▲
     │
-Product Variants
-   ▲     ▲
-   │     │
-Products Containers
-      │
-      ▼
-    Grades
+Market Products
+ ┌──┼──────────┐
+ │  │          │
+ ▼  ▼          ▼
+Products  Containers  Grades
