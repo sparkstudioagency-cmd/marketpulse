@@ -249,3 +249,18 @@ Before adding a new table, ask:
 "Does this represent a real-world entity?"
 
 If the answer is no, it probably does not belong in the database.
+## Version 1 Entity Relationship Diagram
+
+Markets
+    │
+    ▼
+Daily Prices
+    ▲
+    │
+Product Variants
+   ▲     ▲
+   │     │
+Products Containers
+      │
+      ▼
+    Grades
