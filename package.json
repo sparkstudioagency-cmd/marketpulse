@@ -21,6 +21,7 @@
   "homepage": "https://github.com/sparkstudioagency-cmd/marketpulse#readme",
   "devDependencies": {
     "@playwright/test": "^1.61.1",
-    "@types/node": "^26.1.1"
+    "@types/node": "^26.1.1",
+    "supabase": "^2.109.1"
   }
 }
