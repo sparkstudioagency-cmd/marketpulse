@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Playwright output
+playwright-report/
+test-results/
+blob-report/
+
+# Scraper-generated data
+scraper-output/
+processed-output/
+scraper-diagnostics/
+
+# Scraper run logs
+tshwane-*.txt
+tshwane-*.txtv
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+
+# TypeScript build output
+dist/
+build/
+coverage/
