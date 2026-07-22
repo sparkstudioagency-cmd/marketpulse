@@ -11,7 +11,9 @@
     "scrape:tshwane": "tsx scrapers/markets/tshwane.ts",
     "process:tshwane": "tsx scrapers/engine/processor.ts",
     "import:tshwane": "tsx scrapers/engine/supabase-importer.ts",
-    "test": "playwright test"
+    "test": "playwright test",
+    "pipeline:tshwane": "tsx scrapers/engine/tshwane-pipeline.ts",
+    "pipeline:tshwane:commit": "tsx scrapers/engine/tshwane-pipeline.ts --commit"
   },
   "repository": {
     "type": "git",
