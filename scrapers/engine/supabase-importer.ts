@@ -1239,6 +1239,10 @@ async function importRecords(
               toNullableNumber(
                 record.valueOfSales,
               ),
+            is_correction:
+              Boolean(
+                record.isCorrection,
+              ),
           };
         },
       );
