@@ -13,7 +13,8 @@
     "import:tshwane": "tsx scrapers/engine/supabase-importer.ts",
     "test": "playwright test",
     "pipeline:tshwane": "tsx scrapers/engine/tshwane-pipeline.ts",
-    "pipeline:tshwane:commit": "tsx scrapers/engine/tshwane-pipeline.ts --commit"
+    "pipeline:tshwane:commit": "tsx scrapers/engine/tshwane-pipeline.ts --commit",
+    "pipeline:tshwane:dry-run-existing": "tsx scrapers/engine/tshwane-pipeline.ts --skip-scrape"
   },
   "repository": {
     "type": "git",

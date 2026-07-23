@@ -1,21 +1,37 @@
-﻿import { spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
 interface PipelineOptions {
     commit: boolean;
+    skipScrape: boolean;
 }
 
 function parseArguments(): PipelineOptions {
     return {
-        commit: process.argv.includes("--commit")
+        commit: process.argv.includes("--commit"),
+        skipScrape: process.argv.includes("--skip-scrape")
     };
 }
 
-function getNpxCommand(): string {
-    return process.platform === "win32"
-        ? "npx.cmd"
-        : "npx";
+function getTsxCliPath(): string {
+    const tsxCliPath =
+        path.join(
+            process.cwd(),
+            "node_modules",
+            "tsx",
+            "dist",
+            "cli.mjs"
+        );
+
+    if (!fs.existsSync(tsxCliPath)) {
+        throw new Error(
+            `Local tsx CLI was not found: ${tsxCliPath}. ` +
+            "Run npm install before using the pipeline."
+        );
+    }
+
+    return tsxCliPath;
 }
 
 function runCommand(
@@ -163,8 +179,11 @@ async function runPipeline(): Promise<void> {
     const options =
         parseArguments();
 
-    const npxCommand =
-        getNpxCommand();
+    const nodeCommand =
+        process.execPath;
+
+    const tsxCliPath =
+        getTsxCliPath();
 
     console.log("");
     console.log(
@@ -184,23 +203,29 @@ async function runPipeline(): Promise<void> {
             : "Mode: DRY RUN"
     );
 
-    console.log("");
-    console.log(
-        "Stage 1: Running Tshwane scraper..."
-    );
+    if (options.skipScrape) {
+        console.log(
+            "Scraper stage: SKIPPED"
+        );
+    } else {
+        console.log("");
+        console.log(
+            "Stage 1: Running Tshwane scraper..."
+        );
 
-    await runCommand(
-        npxCommand,
-        [
-            "tsx",
-            "scrapers/markets/tshwane.ts"
-        ]
-    );
+        await runCommand(
+            nodeCommand,
+            [
+                tsxCliPath,
+                "scrapers/markets/tshwane.ts"
+            ]
+        );
 
-    console.log("");
-    console.log(
-        "Stage 1 completed successfully."
-    );
+        console.log("");
+        console.log(
+            "Stage 1 completed successfully."
+        );
+    }
 
     const cleanJsonPath =
         findNewestCleanJson();
@@ -218,7 +243,7 @@ async function runPipeline(): Promise<void> {
     );
 
     const importerArguments: string[] = [
-        "tsx",
+        tsxCliPath,
         "scrapers/engine/supabase-importer.ts",
         cleanJsonPath
     ];
@@ -230,7 +255,7 @@ async function runPipeline(): Promise<void> {
     }
 
     await runCommand(
-        npxCommand,
+        nodeCommand,
         importerArguments
     );
 
