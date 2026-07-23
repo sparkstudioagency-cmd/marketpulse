@@ -6,7 +6,16 @@
   "directories": {
     "doc": "docs"
   },
-  "scripts": {},
+  "scripts": {
+    "typecheck": "tsc",
+    "scrape:tshwane": "tsx scrapers/markets/tshwane.ts",
+    "process:tshwane": "tsx scrapers/engine/processor.ts",
+    "import:tshwane": "tsx scrapers/engine/supabase-importer.ts",
+    "test": "playwright test",
+    "pipeline:tshwane": "tsx scrapers/engine/tshwane-pipeline.ts",
+    "pipeline:tshwane:commit": "tsx scrapers/engine/tshwane-pipeline.ts --commit",
+    "pipeline:tshwane:dry-run-existing": "tsx scrapers/engine/tshwane-pipeline.ts --skip-scrape"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sparkstudioagency-cmd/marketpulse.git"

@@ -1966,12 +1966,21 @@ async function run(): Promise<void> {
             console.error(
                 "================================"
             );
+
+            /*
+             * Preserve the raw files, but report the overall
+             * command as failed so automated jobs do not mistake
+             * partial success for a complete pipeline run.
+             */
+            process.exitCode = 1;
         }
 
         await page.waitForTimeout(
             5000
         );
     } catch (error) {
+        process.exitCode = 1;
+
         console.error("");
         console.error(
             "================================"
@@ -2027,4 +2036,26 @@ async function run(): Promise<void> {
     }
 }
 
-run();
+void run().catch(
+    (error: unknown): void => {
+        console.error("");
+        console.error(
+            "================================"
+        );
+        console.error(
+            "UNHANDLED SCRAPER FAILURE"
+        );
+        console.error(
+            "================================"
+        );
+
+        console.error(error);
+
+        /*
+         * This catches failures that happen before the main
+         * scraper try/catch is entered, including browser
+         * launch failures.
+         */
+        process.exitCode = 1;
+    }
+);
