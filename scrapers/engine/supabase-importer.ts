@@ -6,6 +6,14 @@ import {
   type SupabaseClient,
 } from "@supabase/supabase-js";
 
+try {
+  process.loadEnvFile();
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+    throw error;
+  }
+}
+
 type NullableNumber = number | null;
 
 interface CleanMarketRecord {
