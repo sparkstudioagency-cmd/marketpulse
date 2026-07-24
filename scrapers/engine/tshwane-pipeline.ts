@@ -7,6 +7,17 @@ interface PipelineOptions {
     skipScrape: boolean;
 }
 
+interface CleanRecord {
+    marketDate?: unknown;
+    isCorrection?: unknown;
+}
+
+interface VerificationExpectations {
+    marketDate: string;
+    expectedDailyPriceRows: number;
+    expectedCorrectionRows: number;
+}
+
 function parseArguments(): PipelineOptions {
     return {
         commit: process.argv.includes("--commit"),
@@ -98,7 +109,9 @@ function runCommand(
     );
 }
 
-function findNewestCleanJson(): string {
+function findNewestCleanJson(
+    minimumModifiedTime?: number
+): string {
     const outputDirectory =
         path.join(
             process.cwd(),
@@ -154,6 +167,14 @@ function findNewestCleanJson(): string {
                     };
                 }
             )
+            .filter(
+                (
+                    file
+                ): boolean =>
+                    minimumModifiedTime === undefined ||
+                    file.modifiedTime >=
+                        minimumModifiedTime
+            )
             .sort(
                 (
                     first,
@@ -167,12 +188,111 @@ function findNewestCleanJson(): string {
         matchingFiles[0];
 
     if (!newestFile) {
+        if (
+            minimumModifiedTime !== undefined
+        ) {
+            throw new Error(
+                "No fresh Tshwane clean JSON file was " +
+                "created during the current pipeline run."
+            );
+        }
+
         throw new Error(
             "No Tshwane clean JSON file was found."
         );
     }
 
     return newestFile.filePath;
+}
+
+function getVerificationExpectations(
+    cleanJsonPath: string
+): VerificationExpectations {
+    const rawJson =
+        fs.readFileSync(
+            cleanJsonPath,
+            "utf8"
+        );
+
+    let parsedJson: unknown;
+
+    try {
+        parsedJson =
+            JSON.parse(rawJson);
+    } catch (error) {
+        throw new Error(
+            `Could not parse clean JSON file: ${cleanJsonPath}`,
+            {
+                cause: error
+            }
+        );
+    }
+
+    if (!Array.isArray(parsedJson)) {
+        throw new Error(
+            "Clean Tshwane JSON must contain a top-level array."
+        );
+    }
+
+    if (parsedJson.length === 0) {
+        throw new Error(
+            "Clean Tshwane JSON contains no records."
+        );
+    }
+
+    const records =
+        parsedJson as CleanRecord[];
+
+    const firstMarketDate =
+        records[0]?.marketDate;
+
+    if (
+        typeof firstMarketDate !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(
+            firstMarketDate
+        )
+    ) {
+        throw new Error(
+            "The first clean record does not contain a valid marketDate."
+        );
+    }
+
+    for (
+        let index = 0;
+        index < records.length;
+        index += 1
+    ) {
+        const record =
+            records[index];
+
+        if (
+            record?.marketDate !==
+            firstMarketDate
+        ) {
+            throw new Error(
+                `Clean JSON contains inconsistent market dates. ` +
+                `Record ${index + 1} has marketDate ` +
+                `"${String(record?.marketDate)}" instead of ` +
+                `"${firstMarketDate}".`
+            );
+        }
+    }
+
+    const expectedCorrectionRows =
+        records.filter(
+            (
+                record: CleanRecord
+            ): boolean =>
+                record.isCorrection === true
+        ).length;
+
+    return {
+        marketDate:
+            firstMarketDate,
+        expectedDailyPriceRows:
+            records.length,
+        expectedCorrectionRows
+    };
 }
 
 async function runPipeline(): Promise<void> {
@@ -203,6 +323,9 @@ async function runPipeline(): Promise<void> {
             : "Mode: DRY RUN"
     );
 
+    const pipelineStartedAt =
+        Date.now();
+
     if (options.skipScrape) {
         console.log(
             "Scraper stage: SKIPPED"
@@ -228,11 +351,37 @@ async function runPipeline(): Promise<void> {
     }
 
     const cleanJsonPath =
-        findNewestCleanJson();
+        findNewestCleanJson(
+            options.skipScrape
+                ? undefined
+                : pipelineStartedAt
+        );
 
     console.log("");
     console.log(
         `Clean JSON selected: ${cleanJsonPath}`
+    );
+
+    const verificationExpectations =
+        getVerificationExpectations(
+            cleanJsonPath
+        );
+
+    console.log("");
+    console.log(
+        "Clean file expectations:"
+    );
+    console.log(
+        `Market date:          ` +
+        `${verificationExpectations.marketDate}`
+    );
+    console.log(
+        `Daily price rows:     ` +
+        `${verificationExpectations.expectedDailyPriceRows}`
+    );
+    console.log(
+        `Correction rows:      ` +
+        `${verificationExpectations.expectedCorrectionRows}`
     );
 
     console.log("");
@@ -259,13 +408,42 @@ async function runPipeline(): Promise<void> {
         importerArguments
     );
 
+    if (options.commit) {
+        console.log("");
+        console.log(
+            "Stage 3: Verifying database import..."
+        );
+
+        await runCommand(
+            nodeCommand,
+            [
+                tsxCliPath,
+                "scrapers/engine/verify-tshwane.ts",
+                verificationExpectations.marketDate,
+                String(
+                    verificationExpectations
+                        .expectedDailyPriceRows
+                ),
+                String(
+                    verificationExpectations
+                        .expectedCorrectionRows
+                )
+            ]
+        );
+
+        console.log("");
+        console.log(
+            "Stage 3 completed successfully."
+        );
+    }
+
     console.log("");
     console.log(
         "================================"
     );
     console.log(
         options.commit
-            ? "PIPELINE AND DATABASE IMPORT COMPLETED"
+            ? "PIPELINE AND DATABASE IMPORT VERIFIED"
             : "PIPELINE DRY-RUN COMPLETED"
     );
     console.log(
