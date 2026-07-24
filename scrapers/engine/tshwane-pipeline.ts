@@ -109,7 +109,9 @@ function runCommand(
     );
 }
 
-function findNewestCleanJson(): string {
+function findNewestCleanJson(
+    minimumModifiedTime?: number
+): string {
     const outputDirectory =
         path.join(
             process.cwd(),
@@ -165,6 +167,14 @@ function findNewestCleanJson(): string {
                     };
                 }
             )
+            .filter(
+                (
+                    file
+                ): boolean =>
+                    minimumModifiedTime === undefined ||
+                    file.modifiedTime >=
+                        minimumModifiedTime
+            )
             .sort(
                 (
                     first,
@@ -178,6 +188,15 @@ function findNewestCleanJson(): string {
         matchingFiles[0];
 
     if (!newestFile) {
+        if (
+            minimumModifiedTime !== undefined
+        ) {
+            throw new Error(
+                "No fresh Tshwane clean JSON file was " +
+                "created during the current pipeline run."
+            );
+        }
+
         throw new Error(
             "No Tshwane clean JSON file was found."
         );
@@ -304,6 +323,9 @@ async function runPipeline(): Promise<void> {
             : "Mode: DRY RUN"
     );
 
+    const pipelineStartedAt =
+        Date.now();
+
     if (options.skipScrape) {
         console.log(
             "Scraper stage: SKIPPED"
@@ -329,7 +351,11 @@ async function runPipeline(): Promise<void> {
     }
 
     const cleanJsonPath =
-        findNewestCleanJson();
+        findNewestCleanJson(
+            options.skipScrape
+                ? undefined
+                : pipelineStartedAt
+        );
 
     console.log("");
     console.log(

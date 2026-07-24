@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import path from "node:path";
 import { Page } from "@playwright/test";
 import {
@@ -1199,6 +1199,8 @@ async function run(): Promise<void> {
                     marketDate
                 );
         } catch (error) {
+            process.exitCode = 1;
+
             console.error("");
             console.error(
                 "================================"
