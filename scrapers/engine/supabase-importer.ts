@@ -46,6 +46,7 @@ interface CleanMarketRecord {
 interface ImportOptions {
   inputPath: string;
   commit: boolean;
+  partial: boolean;
 }
 
 interface LookupRow {
@@ -103,21 +104,42 @@ const MARKET_NAME_ALIASES: Record<string, string> = {
 };
 
 function parseArguments(): ImportOptions {
-  const args: string[] = process.argv.slice(2);
+  const args: string[] =
+    process.argv.slice(2);
 
-  const commit = args.includes("--commit");
+  const commit =
+    args.includes("--commit");
 
-  const positionalArgs = args.filter(
-    (arg: string) => !arg.startsWith("--"),
-  );
+  const partial =
+    args.includes("--partial");
+
+  if (
+    partial &&
+    !commit
+  ) {
+    throw new Error(
+      "--partial may only be used together with --commit.",
+    );
+  }
+
+  const positionalArgs =
+    args.filter(
+      (arg: string) =>
+        !arg.startsWith("--"),
+    );
 
   const inputPath =
     positionalArgs[0] ??
     "processed-output/tshwane-clean-2026-07-20.json";
 
   return {
-    inputPath: path.resolve(process.cwd(), inputPath),
+    inputPath:
+      path.resolve(
+        process.cwd(),
+        inputPath,
+      ),
     commit,
+    partial,
   };
 }
 
@@ -961,6 +983,8 @@ async function completeIngestionRun(
   marketId: number,
   marketDate: string,
   importedRecords: number,
+  finalStatus:
+    "SUCCESS" | "PARTIAL",
 ): Promise<void> {
   const { error } =
     await supabase
@@ -971,7 +995,8 @@ async function completeIngestionRun(
         finished_at:
           new Date()
             .toISOString(),
-        status: "SUCCESS",
+        status:
+          finalStatus,
         records_imported:
           importedRecords,
         records_updated: 0,
@@ -1031,6 +1056,8 @@ async function failIngestionRun(
 async function importRecords(
   supabase: SupabaseClient,
   records: CleanMarketRecord[],
+  finalStatus:
+    "SUCCESS" | "PARTIAL",
 ): Promise<void> {
   const sourceMarketName =
     normalizeText(
@@ -1308,10 +1335,15 @@ async function importRecords(
       marketId,
       marketDate,
       dailyPriceRows.length,
+      finalStatus,
     );
 
     console.log(
       `Imported ${dailyPriceRows.length} daily price records successfully.`,
+    );
+
+    console.log(
+      `Ingestion status: ${finalStatus}`,
     );
   } catch (
     error: unknown
@@ -1387,12 +1419,23 @@ async function main():
     "\nCommit mode enabled.",
   );
 
+  const finalStatus:
+    "SUCCESS" | "PARTIAL" =
+      options.partial
+        ? "PARTIAL"
+        : "SUCCESS";
+
+  console.log(
+    `Requested ingestion status: ${finalStatus}`,
+  );
+
   const supabase =
     createSupabaseAdminClient();
 
   await importRecords(
     supabase,
     records,
+    finalStatus,
   );
 }
 
