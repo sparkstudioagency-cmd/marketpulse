@@ -3,6 +3,20 @@
 on:
   workflow_dispatch:
 
+  schedule:
+    - cron: '7 7 * * *'
+      timezone: 'Africa/Johannesburg'
+
+    - cron: '11 12 * * *'
+      timezone: 'Africa/Johannesburg'
+
+    - cron: '13 17 * * *'
+      timezone: 'Africa/Johannesburg'
+
+concurrency:
+  group: tshwane-market-collection
+  cancel-in-progress: false
+
 jobs:
   collect-tshwane:
     name: Check Tshwane Market
