@@ -1,0 +1,45 @@
+﻿name: Tshwane Market Collection
+
+on:
+  workflow_dispatch:
+
+jobs:
+  collect-tshwane:
+    name: Check Tshwane Market
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Type-check MarketPulse
+        run: npm run typecheck
+
+      - name: Run Tshwane collection pipeline
+        run: npm run pipeline:tshwane:commit
+
+      - name: Upload scraper diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tshwane-scraper-diagnostics
+          path: scraper-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
