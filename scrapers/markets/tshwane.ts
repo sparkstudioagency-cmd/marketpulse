@@ -57,12 +57,227 @@ interface DiagnosticResult {
     htmlPath: string;
 }
 
+type TshwaneRunStatus =
+    "COMPLETE" |
+    "PARTIAL";
+
+interface TshwaneRunStatusFile {
+    marketDate: string;
+    status: TshwaneRunStatus;
+    successfulRecords: number;
+    unavailableProductCount: number;
+    unavailableProducts: string[];
+    technicalFailureCount: number;
+    technicalFailureProducts: string[];
+    skippedPackageCount: number;
+    generatedAt: string;
+}
+
 const EXPECTED_FIELD_COUNT = 16;
 const MAXIMUM_PACKAGE_ATTEMPTS = 3;
 const MAXIMUM_RECOVERY_ATTEMPTS = 3;
 
 const RETRY_WAIT_MS = 1500;
 const RECOVERY_WAIT_MS = 2500;
+
+function isUnavailableMessage(
+    message: string
+): boolean {
+    const normalized =
+        message
+            .replace(
+                /\s+/g,
+                " "
+            )
+            .trim()
+            .toLowerCase();
+
+    return (
+        normalized.includes(
+            "no results found"
+        ) &&
+        (
+            normalized.includes(
+                "not available"
+            ) ||
+            normalized.includes(
+                "unavailable"
+            )
+        )
+    );
+}
+
+function writeRunStatus(
+    marketDate: string,
+    skippedProducts: SkippedProduct[],
+    skippedPackages: SkippedPackage[]
+): {
+    status: TshwaneRunStatus;
+    filePath: string;
+    technicalFailureCount: number;
+} {
+    const unavailableProducts =
+        Array.from(
+            new Set(
+                skippedProducts
+                    .filter(
+                        (
+                            skipped: SkippedProduct
+                        ): boolean =>
+                            isUnavailableMessage(
+                                skipped.message
+                            )
+                    )
+                    .map(
+                        (
+                            skipped: SkippedProduct
+                        ): string =>
+                            skipped.productName
+                    )
+            )
+        );
+
+    const technicallyFailedProducts =
+        skippedProducts
+            .filter(
+                (
+                    skipped: SkippedProduct
+                ): boolean =>
+                    !isUnavailableMessage(
+                        skipped.message
+                    )
+            )
+            .map(
+                (
+                    skipped: SkippedProduct
+                ): string =>
+                    skipped.productName
+            );
+
+    const technicallyFailedPackages =
+        skippedPackages.map(
+            (
+                skipped: SkippedPackage
+            ): string =>
+                skipped.productName
+        );
+
+    const technicalFailureProducts =
+        Array.from(
+            new Set([
+                ...technicallyFailedProducts,
+                ...technicallyFailedPackages
+            ])
+        );
+
+    const technicalFailureCount =
+        technicallyFailedProducts.length +
+        skippedPackages.length;
+
+    const status:
+        TshwaneRunStatus =
+            technicalFailureCount > 0
+                ? "PARTIAL"
+                : "COMPLETE";
+
+    const statusData:
+        TshwaneRunStatusFile = {
+            marketDate,
+            status,
+            successfulRecords:
+                getRecords().length,
+            unavailableProductCount:
+                unavailableProducts.length,
+            unavailableProducts,
+            technicalFailureCount,
+            technicalFailureProducts,
+            skippedPackageCount:
+                skippedPackages.length,
+            generatedAt:
+                new Date()
+                    .toISOString()
+        };
+
+    const outputDirectory =
+        path.join(
+            process.cwd(),
+            "scraper-output"
+        );
+
+    fs.mkdirSync(
+        outputDirectory,
+        {
+            recursive: true
+        }
+    );
+
+    const filePath =
+        path.join(
+            outputDirectory,
+            `tshwane-run-status-${marketDate}.json`
+        );
+
+    fs.writeFileSync(
+        filePath,
+        JSON.stringify(
+            statusData,
+            null,
+            2
+        ),
+        "utf8"
+    );
+
+    console.log("");
+    console.log(
+        "================================"
+    );
+
+    console.log(
+        "TSHWANE RUN STATUS"
+    );
+
+    console.log(
+        "================================"
+    );
+
+    console.log(
+        `Status:                 ${status}`
+    );
+
+    console.log(
+        `Successful records:     ${statusData.successfulRecords}`
+    );
+
+    console.log(
+        `Unavailable products:   ${statusData.unavailableProductCount}`
+    );
+
+    console.log(
+        `Technical failures:     ${technicalFailureCount}`
+    );
+
+    console.log(
+        `Technical products:     ${technicalFailureProducts.length}`
+    );
+
+    console.log(
+        `Skipped packages:       ${statusData.skippedPackageCount}`
+    );
+
+    console.log(
+        `Status file:            ${filePath}`
+    );
+
+    console.log(
+        "================================"
+    );
+
+    return {
+        status,
+        filePath,
+        technicalFailureCount
+    };
+}
 
 function sanitiseFileName(
     value: string
@@ -1841,6 +2056,34 @@ async function run(): Promise<void> {
         printSkippedPackageReport(
             skippedPackages
         );
+
+        const runStatus =
+            writeRunStatus(
+                marketDate,
+                skippedProducts,
+                skippedPackages
+            );
+
+        if (
+            runStatus.status ===
+            "PARTIAL"
+        ) {
+            console.warn("");
+            console.warn(
+                "This market day contains useful data, " +
+                "but technical extraction failures remain."
+            );
+
+            console.warn(
+                "Successful records will still be exported " +
+                "and processed."
+            );
+
+            console.warn(
+                "The pipeline should import this run as PARTIAL " +
+                "and retry it later."
+            );
+        }
 
         console.log("");
         console.log(
