@@ -1,29 +1,10 @@
-﻿import { LiveSupplyWatch } from "@/components/live-supply-watch";
+﻿export const dynamic = "force-dynamic";
+
+import { LiveSupplyWatch } from "@/components/live-supply-watch";
 import { LivePriceActivity } from "@/components/live-price-activity";
 import { LiveMarketMovers } from "@/components/live-market-movers";
 import { LiveMarketSummary } from "@/components/live-market-summary";
 import { LiveCollectionHealth } from "@/components/live-collection-health";
-
-const supplySignals = [
-  {
-    product: "Tomatoes",
-    detail: "Inventory down 28% vs previous market day",
-    status: "Tightening",
-    tone: "amber",
-  },
-  {
-    product: "Broccoli & Cauli Mix",
-    detail: "No market availability reported",
-    status: "Unavailable",
-    tone: "red",
-  },
-  {
-    product: "Potatoes",
-    detail: "Strong stock position across grades",
-    status: "Healthy",
-    tone: "green",
-  },
-];
 
 function SearchIcon() {
   return (
@@ -58,34 +39,6 @@ function ChevronDown() {
       aria-hidden="true"
     >
       <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}
-
-function TrendIcon({ direction }: { direction: "up" | "down" }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {direction === "up" ? (
-        <>
-          <path d="m3 17 6-6 4 4 8-8" />
-          <path d="M14 7h7v7" />
-        </>
-      ) : (
-        <>
-          <path d="m3 7 6 6 4-4 8 8" />
-          <path d="M14 17h7v-7" />
-        </>
-      )}
     </svg>
   );
 }
@@ -340,6 +293,8 @@ export default function Home() {
     </div>
   );
 }
+
+
 
 
 
