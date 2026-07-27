@@ -1,23 +1,38 @@
-import { chromium, Page, Browser } from "@playwright/test";
+﻿import {
+  chromium,
+  type Browser,
+  type Page,
+} from "@playwright/test";
+
+function shouldRunHeadless(): boolean {
+  return (
+    process.env.CI === "true" ||
+    process.env.GITHUB_ACTIONS === "true"
+  );
+}
 
 export async function launchBrowser(): Promise<{
   browser: Browser;
   page: Page;
 }> {
-    console.log("Launching browser..."); 
+  const headless = shouldRunHeadless();
+
+  console.log(
+    `Launching browser in ${headless ? "headless" : "headed"} mode...`,
+  );
 
   const browser = await chromium.launch({
-    headless: false
+    headless,
   });
 
   const context = await browser.newContext({
-    ignoreHTTPSErrors: true
+    ignoreHTTPSErrors: true,
   });
 
   const page = await context.newPage();
 
   return {
     browser,
-    page
+    page,
   };
 }
