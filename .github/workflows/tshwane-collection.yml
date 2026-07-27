@@ -30,7 +30,7 @@ jobs:
   collect-tshwane:
     name: Check Tshwane Market
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -66,3 +66,4 @@ jobs:
           path: scraper-diagnostics/
           if-no-files-found: ignore
           retention-days: 14
+
