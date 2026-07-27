@@ -7,10 +7,19 @@ on:
     - cron: '7 7 * * *'
       timezone: 'Africa/Johannesburg'
 
+    - cron: '37 9 * * *'
+      timezone: 'Africa/Johannesburg'
+
     - cron: '11 12 * * *'
       timezone: 'Africa/Johannesburg'
 
+    - cron: '41 14 * * *'
+      timezone: 'Africa/Johannesburg'
+
     - cron: '13 17 * * *'
+      timezone: 'Africa/Johannesburg'
+
+    - cron: '43 19 * * *'
       timezone: 'Africa/Johannesburg'
 
 concurrency:
