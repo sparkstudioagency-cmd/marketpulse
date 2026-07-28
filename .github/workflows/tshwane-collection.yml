@@ -58,12 +58,18 @@ jobs:
       - name: Run Tshwane collection pipeline
         run: npm run pipeline:tshwane:commit
 
-      - name: Upload scraper diagnostics
-        if: ${{ !cancelled() }}
+      - name: Upload Tshwane recovery files
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: tshwane-scraper-diagnostics
-          path: scraper-diagnostics/
+          name: tshwane-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            scraper-diagnostics/
+            scraper-output/tshwane-checkpoint-*.json
+            scraper-output/tshwane-run-status-*.json
+            scraper-output/tshwane-publication-date.json
+            scraper-output/tshwane-market-records-*.json
+            processed-output/
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 30
 
