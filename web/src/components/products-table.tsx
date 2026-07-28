@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { MarketProductSnapshot } from "@/lib/market-products";
 
 type SortOption =
@@ -253,6 +254,8 @@ export function ProductsTable({
 }: {
   products: MarketProductSnapshot[];
 }) {
+  const router = useRouter();
+
   const [query, setQuery] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [sort, setSort] =
@@ -751,7 +754,36 @@ export function ProductsTable({
                   return (
                     <tr
                       key={product.productId}
-                      className="cursor-pointer border-b border-[#f0f1f2] last:border-0 hover:bg-[#f8faf9]"
+                      role="link"
+                      tabIndex={0}
+                      onMouseEnter={() =>
+                        router.prefetch(
+                          `/products/${product.productId}`,
+                        )
+                      }
+                      onFocus={() =>
+                        router.prefetch(
+                          `/products/${product.productId}`,
+                        )
+                      }
+                      onClick={() =>
+                        router.push(
+                          `/products/${product.productId}`,
+                        )
+                      }
+                      onKeyDown={(event) => {
+                        if (
+                          event.key === "Enter" ||
+                          event.key === " "
+                        ) {
+                          event.preventDefault();
+
+                          router.push(
+                            `/products/${product.productId}`,
+                          );
+                        }
+                      }}
+                      className="cursor-pointer border-b border-[#f0f1f2] transition last:border-0 hover:bg-[#f8faf9] focus:bg-[#f8faf9] focus:outline-none"
                     >
                       <td className="px-5 py-4">
                         <div className="text-[12px] font-semibold text-[#20252a]">
@@ -807,8 +839,3 @@ export function ProductsTable({
     </div>
   );
 }
-
-
-
-
-

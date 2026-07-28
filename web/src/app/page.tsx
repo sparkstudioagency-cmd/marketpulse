@@ -5,6 +5,7 @@ import { LivePriceActivity } from "@/components/live-price-activity";
 import { LiveMarketMovers } from "@/components/live-market-movers";
 import { LiveMarketSummary } from "@/components/live-market-summary";
 import { LiveCollectionHealth } from "@/components/live-collection-health";
+import { getTshwaneCollectionHealth } from "@/lib/market-data";
 
 function SearchIcon() {
   return (
@@ -111,7 +112,22 @@ function NavIcon({
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  const collectionHealth =
+    await getTshwaneCollectionHealth();
+
+  const formattedMarketDate =
+    new Intl.DateTimeFormat("en-ZA", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(
+      new Date(
+        `${collectionHealth.marketDate}T00:00:00Z`,
+      ),
+    );
+
   return (
     <div className="min-h-screen bg-[#f6f7f8] text-[#15191f]">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[222px] border-r border-[#e4e6e8] bg-[#fbfbfc] lg:block">
@@ -156,7 +172,7 @@ export default function Home() {
               ].map(([icon, label]) => (
                 <a
                   key={label}
-                  href="#"
+                  href={label === "Products" ? "/products" : "#"}
                   className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-[#5f656d] transition hover:bg-[#f0f1f2] hover:text-[#171b20]"
                 >
                   <NavIcon
@@ -250,7 +266,7 @@ export default function Home() {
               </h1>
 
               <p className="mt-1.5 text-[13px] text-[#737981]">
-                Tshwane Fresh Produce Market · Market data for 24 July 2026
+                Tshwane Fresh Produce Market · Market data for {formattedMarketDate}
               </p>
             </div>
 
@@ -293,11 +309,4 @@ export default function Home() {
     </div>
   );
 }
-
-
-
-
-
-
-
 
