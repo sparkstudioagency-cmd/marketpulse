@@ -1,4 +1,4 @@
-﻿import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 const TSHWANE_MARKET_NAME =
   "Tshwane Fresh Produce Market";
@@ -599,10 +599,6 @@ export async function getProductDetail(
       .from("market_products")
       .select(
         "id,product_id,container_id,grade_id,mass,unit,province",
-      )
-      .eq(
-        "market_id",
-        market.id,
       )
       .eq(
         "product_id",
