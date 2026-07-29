@@ -1,4 +1,4 @@
-﻿import { spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -35,6 +35,51 @@ interface VerificationExpectations {
 
 interface CommandResult {
     exitCode: number;
+}
+interface PublicationDateFile {
+    marketDate: string;
+    generatedAt?: unknown;
+}
+
+function readPublishedMarketDate(): string {
+    const publicationPath =
+        path.join(
+            process.cwd(),
+            "scraper-output",
+            "tshwane-publication-date.json"
+        );
+
+    if (
+        !fs.existsSync(
+            publicationPath
+        )
+    ) {
+        throw new Error(
+            `Publication date handoff was not found: ${publicationPath}`
+        );
+    }
+
+    const parsed =
+        JSON.parse(
+            fs.readFileSync(
+                publicationPath,
+                "utf8"
+            )
+        ) as PublicationDateFile;
+
+    if (
+        typeof parsed.marketDate !==
+            "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(
+            parsed.marketDate
+        )
+    ) {
+        throw new Error(
+            "Publication date handoff contains an invalid marketDate."
+        );
+    }
+
+    return parsed.marketDate;
 }
 
 interface TshwaneRunStatusFile {
@@ -176,6 +221,23 @@ async function runCommand(
             `Command failed with exit code ${result.exitCode}.`
         );
     }
+}
+
+async function setIngestionState(
+    nodeCommand: string,
+    tsxCliPath: string,
+    status: "PENDING" | "RUNNING",
+    marketDate: string
+): Promise<void> {
+    await runCommand(
+        nodeCommand,
+        [
+            tsxCliPath,
+            "scrapers/engine/tshwane-ingestion-state.ts",
+            status,
+            marketDate
+        ]
+    );
 }
 
 async function checkPublication(
@@ -692,6 +754,25 @@ async function runPipeline(): Promise<void> {
 
             return;
         }
+
+        if (
+            options.commit
+        ) {
+            const publishedMarketDate =
+                readPublishedMarketDate();
+
+            console.log("");
+            console.log(
+                "Stage 0.5: Registering Tshwane market date for recovery..."
+            );
+
+            await setIngestionState(
+                nodeCommand,
+                tsxCliPath,
+                "PENDING",
+                publishedMarketDate
+            );
+        }
     }
 
     /*
@@ -747,6 +828,25 @@ async function runPipeline(): Promise<void> {
             console.log(
                 "Existing duplicate protection will prevent " +
                 "already-saved package rows from being duplicated."
+            );
+        }
+
+        if (
+            options.commit
+        ) {
+            const publishedMarketDate =
+                readPublishedMarketDate();
+
+            console.log("");
+            console.log(
+                "Stage 0.6: Marking Tshwane collection as RUNNING..."
+            );
+
+            await setIngestionState(
+                nodeCommand,
+                tsxCliPath,
+                "RUNNING",
+                publishedMarketDate
             );
         }
 

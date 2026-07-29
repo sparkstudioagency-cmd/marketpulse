@@ -1,4 +1,6 @@
-﻿import process from "node:process";
+﻿import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
 import { chromium, type Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 
@@ -52,6 +54,55 @@ type IngestionStatus =
 interface IngestionRunRow {
     scrape_date: string;
     status: IngestionStatus;
+}
+interface PublicationDateFile {
+    marketDate: string;
+    generatedAt: string;
+}
+
+function writePublishedMarketDate(
+    marketDate: string
+): void {
+    const outputDirectory =
+        path.join(
+            process.cwd(),
+            "scraper-output"
+        );
+
+    fs.mkdirSync(
+        outputDirectory,
+        {
+            recursive: true
+        }
+    );
+
+    const outputPath =
+        path.join(
+            outputDirectory,
+            "tshwane-publication-date.json"
+        );
+
+    const payload:
+        PublicationDateFile = {
+            marketDate,
+            generatedAt:
+                new Date()
+                    .toISOString()
+        };
+
+    fs.writeFileSync(
+        outputPath,
+        JSON.stringify(
+            payload,
+            null,
+            2
+        ),
+        "utf8"
+    );
+
+    console.log(
+        `Publication date handoff saved: ${outputPath}`
+    );
 }
 
 function convertDateParts(
@@ -407,6 +458,11 @@ async function run(): Promise<void> {
     console.log("");
     console.log(
         `Website market date: ${publishedMarketDate}`
+    );
+
+
+    writePublishedMarketDate(
+        publishedMarketDate
     );
 
     console.log("");
