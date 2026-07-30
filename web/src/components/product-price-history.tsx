@@ -1,4 +1,4 @@
-﻿import type { ProductHistoryPoint } from "@/lib/market-product-detail";
+import type { ProductHistoryPoint } from "@/lib/market-product-detail";
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-ZA", {
@@ -31,7 +31,7 @@ export function ProductPriceHistory({
 
   if (usablePoints.length === 0) {
     return (
-      <div className="flex h-[320px] items-center justify-center rounded-xl border border-[#e3e5e7] bg-white">
+      <div className="flex h-[240px] items-center justify-center rounded-xl border border-[#e3e5e7] bg-white">
         <div className="text-center">
           <p className="text-[12px] font-semibold text-[#42484e]">
             No historical price data yet
@@ -46,7 +46,7 @@ export function ProductPriceHistory({
   }
 
   const width = 900;
-  const height = 300;
+  const height = 220;
 
   const padding = {
     top: 26,
@@ -165,10 +165,10 @@ export function ProductPriceHistory({
         </div>
       </div>
 
-      <div className="overflow-x-auto px-3 pb-3 pt-2">
+      <div className="px-3 pb-3 pt-2">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="h-auto min-w-[720px] w-full"
+          className="h-auto w-full"
           role="img"
           aria-label="Historical realised price per kilogram chart"
         >

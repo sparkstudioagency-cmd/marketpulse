@@ -1,6 +1,7 @@
 ﻿import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { MarketPulseShell } from "@/components/marketpulse-shell";
 import { ProductPriceHistory } from "@/components/product-price-history";
 import {
   getProductDetail,
@@ -507,7 +508,7 @@ export default async function ProductPage({
     product.movementPercent >= 0;
 
   return (
-    <main className="min-h-screen bg-[#f4f5f5]">
+    <MarketPulseShell activeNav="products">
       <div className="mx-auto max-w-[1500px] px-5 py-6 lg:px-8 lg:py-8">
         <div className="mb-5">
           <Link
@@ -701,8 +702,7 @@ export default async function ProductPage({
           />
         </section>
       </div>
-    </main>
+    </MarketPulseShell>
   );
 }
-
 
