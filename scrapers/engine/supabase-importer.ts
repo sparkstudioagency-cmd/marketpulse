@@ -366,6 +366,84 @@ function makeMarketProductKey(
   });
 }
 
+function findDuplicateSourceMarketProducts(
+  records: CleanMarketRecord[],
+) {
+  const groupedRows =
+    new Map<string, number[]>();
+
+  records.forEach(
+    (record, sourceIndex) => {
+      const key =
+        makeSourceMarketProductKey(
+          record,
+        );
+
+      const indexes =
+        groupedRows.get(key) ?? [];
+
+      indexes.push(sourceIndex);
+      groupedRows.set(key, indexes);
+    },
+  );
+
+  return Array.from(
+    groupedRows.entries(),
+  )
+    .filter(
+      ([, indexes]) =>
+        indexes.length > 1,
+    )
+    .flatMap(
+      ([key, indexes], groupIndex) =>
+        indexes.map(
+          (
+            sourceIndex,
+            occurrenceIndex,
+          ) => {
+            const record =
+              records[sourceIndex];
+
+            return {
+              duplicateGroup:
+                groupIndex + 1,
+              occurrence:
+                occurrenceIndex + 1,
+              sourceRow:
+                sourceIndex + 1,
+              product:
+                normalizeText(
+                  record.product,
+                ),
+              container:
+                normalizeCode(
+                  record.container,
+                  DEFAULT_CONTAINER_CODE,
+                ),
+              grade:
+                normalizeCode(
+                  record.grade,
+                  DEFAULT_GRADE_CODE,
+                ),
+              mass:
+                toNullableNumber(
+                  record.mass,
+                ),
+              unit:
+                normalizeUnit(
+                  record.count,
+                ),
+              province:
+                normalizeProvince(
+                  record.province,
+                ),
+              key,
+            };
+          },
+        ),
+    );
+}
+
 function buildSummary(
   records: CleanMarketRecord[],
   options: ImportOptions,
@@ -1397,6 +1475,19 @@ async function main():
       .duplicateMarketProductKeys >
     0
   ) {
+    const duplicateRows =
+      findDuplicateSourceMarketProducts(
+        records,
+      );
+
+    console.error(
+      "\nDuplicate market-product source records:",
+    );
+
+    console.table(
+      duplicateRows,
+    );
+
     throw new Error(
       `The file contains ${summary.duplicateMarketProductKeys} ` +
         "duplicate market-product keys after including province.",
