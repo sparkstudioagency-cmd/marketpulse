@@ -79,6 +79,48 @@ const MAXIMUM_RECOVERY_ATTEMPTS = 3;
 
 const RETRY_WAIT_MS = 1500;
 const RECOVERY_WAIT_MS = 2500;
+const FIELD_DETECTION_TIMEOUT_MS =
+    30_000;
+
+async function countRecordFields(
+    page: Page
+): Promise<number> {
+    try {
+        return await Promise.race([
+            page
+                .locator(
+                    'input[type="text"]'
+                )
+                .count(),
+            new Promise<number>(
+                (_, reject) => {
+                    setTimeout(
+                        () => {
+                            reject(
+                                new Error(
+                                    "Record field detection timed out."
+                                )
+                            );
+                        },
+                        FIELD_DETECTION_TIMEOUT_MS
+                    );
+                }
+            )
+        ]);
+    } catch (error) {
+        const message =
+            error instanceof Error
+                ? error.message
+                : String(error);
+
+        console.warn(
+            `Record field detection failed: ` +
+            `${message}`
+        );
+
+        return 0;
+    }
+}
 
 function isUnavailableMessage(
     message: string
@@ -1725,11 +1767,9 @@ async function run(): Promise<void> {
                     );
 
                     const inputCount =
-                        await page
-                            .locator(
-                                'input[type="text"]'
-                            )
-                            .count();
+                        await countRecordFields(
+                            page
+                        );
 
                     console.log(
                         `Record fields detected: ` +
