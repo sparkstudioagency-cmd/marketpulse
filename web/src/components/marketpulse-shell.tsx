@@ -246,7 +246,7 @@ function CollectionStatus() {
       </div>
 
       <p className="text-[11px] leading-5 text-[#69726d]">
-        Tshwane is checked automatically three times each day.
+        Tshwane is checked automatically six times each day.
       </p>
     </div>
   );
