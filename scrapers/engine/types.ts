@@ -45,3 +45,46 @@ export interface MarketRecord {
      */
     scrapedAt: string;
 }
+
+export type CheckpointProductOutcome =
+    "COMPLETED" |
+    "SKIPPED" |
+    "UNAVAILABLE";
+
+export interface CheckpointProductReference {
+    index: number;
+    name: string;
+}
+
+export interface CheckpointCompletedProduct
+    extends CheckpointProductReference {
+    outcome: CheckpointProductOutcome;
+}
+
+export interface TshwaneCheckpointProgress {
+    nextProductIndex: number;
+    activeProduct: CheckpointProductReference | null;
+    lastFinishedProduct: CheckpointCompletedProduct | null;
+}
+
+export interface TshwaneCheckpointV1 {
+    version: 1;
+    marketDate: string;
+    progress: TshwaneCheckpointProgress;
+    records: MarketRecord[];
+}
+
+export type TshwaneCheckpointFile =
+    TshwaneCheckpointV1 |
+    MarketRecord[];
+
+export type CheckpointFormat =
+    "none" |
+    "legacy-array" |
+    "v1";
+
+export interface LoadCheckpointResult {
+    recordCount: number;
+    format: CheckpointFormat;
+    progress: TshwaneCheckpointProgress | null;
+}
