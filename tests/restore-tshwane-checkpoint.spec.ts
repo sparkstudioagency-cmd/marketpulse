@@ -63,6 +63,11 @@ set -euo pipefail
 echo "$*" >> "$FAKE_GH_LOG"
 
 if [[ "$1" == "api" ]]; then
+    if [[ " $* " == *" --slurp "* || " $* " == *" --paginate "* ]]; then
+        echo "unsupported pagination flag" >&2
+        exit 19
+    fi
+
     if [[ "$FAKE_SCENARIO" == "api-failure" ]]; then
         echo "mock API failure" >&2
         exit 20
@@ -267,4 +272,8 @@ test("script filters expired and non-recovery artifacts in its API query", () =>
     expect(source).toContain(
         "tshwane-checkpoint-*.json"
     );
+    expect(source).not.toContain("--slurp");
+    expect(source).not.toContain("--paginate");
+    expect(source).toContain("[.workflow_runs[]]");
+    expect(source).toContain(".artifacts[]");
 });

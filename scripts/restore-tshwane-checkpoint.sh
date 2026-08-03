@@ -12,13 +12,11 @@ trap 'rm -rf "$restore_root"' EXIT
 runs_file="$restore_root/workflow-runs.txt"
 
 gh api \
-    --paginate \
-    --slurp \
     --method GET \
     "repos/${GITHUB_REPOSITORY}/actions/workflows/tshwane-collection.yml/runs" \
     -f per_page=100 \
     --jq '
-        [.[].workflow_runs[]]
+        [.workflow_runs[]]
         | sort_by(.created_at)
         | reverse[]
         | .id
@@ -34,14 +32,12 @@ while IFS= read -r run_id; do
     artifacts_file="$restore_root/artifacts-${run_id}.tsv"
 
     gh api \
-        --paginate \
-        --slurp \
         --method GET \
         "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" \
         -f per_page=100 \
         --jq '
             [
-                .[].artifacts[]
+                .artifacts[]
                 | select(
                     (.expired == false)
                     and
