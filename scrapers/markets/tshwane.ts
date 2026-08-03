@@ -17,10 +17,16 @@ import { parseRecord } from "../engine/parser";
 import {
     saveRecord,
     getRecords,
-    loadCheckpoint,
-    exportCheckpoint,
+    loadCheckpointWithProgress,
+    exportCheckpointWithProgress,
     exportRecordsToJson
 } from "../engine/saver";
+import {
+    CheckpointProductOutcome,
+    LoadCheckpointResult,
+    MarketRecord,
+    TshwaneCheckpointProgress
+} from "../engine/types";
 
 interface SkippedPackage {
     productIndex: number;
@@ -574,12 +580,10 @@ function formatDuration(
         .join(":");
 }
 
-function determineCheckpointResumeIndex(
-    products: string[]
+export function determineLegacyCheckpointResumeIndex(
+    products: string[],
+    existingRecords: MarketRecord[]
 ): number {
-    const existingRecords =
-        getRecords();
-
     if (
         existingRecords.length === 0
     ) {
@@ -619,6 +623,206 @@ function determineCheckpointResumeIndex(
      * from being added again.
      */
     return lastProductIndex;
+}
+
+export function validateCheckpointProgressAgainstProducts(
+    progress: TshwaneCheckpointProgress,
+    products: string[]
+): void {
+    const totalProducts = products.length;
+
+    if (
+        progress.nextProductIndex < 0 ||
+        progress.nextProductIndex > totalProducts
+    ) {
+        throw new Error(
+            `Checkpoint resume index ` +
+            `${progress.nextProductIndex} is outside ` +
+            `the current product list of ` +
+            `${totalProducts} products.`
+        );
+    }
+
+    const validateProductReference = (
+        label: string,
+        reference: {
+            index: number;
+            name: string;
+        }
+    ): void => {
+        if (
+            reference.index < 0 ||
+            reference.index >= totalProducts
+        ) {
+            throw new Error(
+                `${label} index ${reference.index} is ` +
+                `outside the current product list.`
+            );
+        }
+
+        if (
+            products[reference.index] !==
+            reference.name
+        ) {
+            throw new Error(
+                `${label} mismatch at index ` +
+                `${reference.index}. Expected ` +
+                `"${reference.name}", found ` +
+                `"${products[reference.index]}".`
+            );
+        }
+    };
+
+    if (progress.activeProduct !== null) {
+        validateProductReference(
+            "Checkpoint active product",
+            progress.activeProduct
+        );
+    }
+
+    if (progress.lastFinishedProduct !== null) {
+        validateProductReference(
+            "Checkpoint last finished product",
+            progress.lastFinishedProduct
+        );
+    }
+}
+
+export interface ResumeSelection {
+    automaticIndex: number;
+    selectedIndex: number;
+    source: "explicit" | "v1" | "legacy" | "zero";
+}
+
+export function selectResumeStartIndex(
+    products: string[],
+    checkpoint: LoadCheckpointResult,
+    existingRecords: MarketRecord[],
+    explicitStartValue?: string
+): ResumeSelection {
+    let automaticIndex = 0;
+    let automaticSource:
+        "v1" | "legacy" | "zero" = "zero";
+
+    if (
+        checkpoint.format === "v1" &&
+        checkpoint.progress !== null
+    ) {
+        validateCheckpointProgressAgainstProducts(
+            checkpoint.progress,
+            products
+        );
+        automaticIndex =
+            checkpoint.progress.nextProductIndex;
+        automaticSource = "v1";
+    } else if (checkpoint.format === "legacy-array") {
+        automaticIndex =
+            determineLegacyCheckpointResumeIndex(
+                products,
+                existingRecords
+            );
+        automaticSource = "legacy";
+    }
+
+    if (explicitStartValue !== undefined) {
+        const explicitIndex = readPositiveInteger(
+            explicitStartValue,
+            -1
+        );
+
+        if (explicitIndex >= 0) {
+            return {
+                automaticIndex,
+                selectedIndex: explicitIndex,
+                source: "explicit"
+            };
+        }
+    }
+
+    return {
+        automaticIndex,
+        selectedIndex: automaticIndex,
+        source: automaticSource
+    };
+}
+
+export function createRunCheckpointProgress(
+    selectedIndex: number,
+    restoredProgress: TshwaneCheckpointProgress | null
+): TshwaneCheckpointProgress {
+    if (
+        restoredProgress !== null &&
+        selectedIndex === restoredProgress.nextProductIndex
+    ) {
+        return structuredClone(restoredProgress);
+    }
+
+    return {
+        nextProductIndex: selectedIndex,
+        activeProduct: null,
+        lastFinishedProduct: null
+    };
+}
+
+export function markCheckpointProductActive(
+    progress: TshwaneCheckpointProgress,
+    productIndex: number,
+    productName: string
+): TshwaneCheckpointProgress {
+    return {
+        ...progress,
+        nextProductIndex: productIndex,
+        activeProduct: {
+            index: productIndex,
+            name: productName
+        }
+    };
+}
+
+export function markCheckpointProductFinished(
+    progress: TshwaneCheckpointProgress,
+    productIndex: number,
+    productName: string,
+    outcome: CheckpointProductOutcome
+): TshwaneCheckpointProgress {
+    return {
+        ...progress,
+        nextProductIndex: productIndex + 1,
+        activeProduct: null,
+        lastFinishedProduct: {
+            index: productIndex,
+            name: productName,
+            outcome
+        }
+    };
+}
+
+export function calculateProductRange(
+    startProductIndex: number,
+    totalProducts: number,
+    maximumProductsValue?: string
+): {
+    startProductIndex: number;
+    endProductIndex: number;
+} {
+    const boundedStartProductIndex = Math.min(
+        startProductIndex,
+        totalProducts
+    );
+    const requestedMaximumProducts =
+        readPositiveInteger(
+            maximumProductsValue,
+            totalProducts - boundedStartProductIndex
+        );
+
+    return {
+        startProductIndex: boundedStartProductIndex,
+        endProductIndex: Math.min(
+            totalProducts,
+            boundedStartProductIndex +
+                requestedMaximumProducts
+        )
+    };
 }
 
 function logProgress(
@@ -1420,6 +1624,19 @@ async function run(): Promise<void> {
 
     let marketDate = "";
     let loadedRecordCount = 0;
+    let checkpointLoadResult:
+        LoadCheckpointResult = {
+            recordCount: 0,
+            format: "none",
+            progress: null
+        };
+    let checkpointProgress:
+        TshwaneCheckpointProgress = {
+            nextProductIndex: 0,
+            activeProduct: null,
+            lastFinishedProduct: null
+        };
+    let checkpointCanBeExported = false;
 
     const skippedProducts:
         SkippedProduct[] = [];
@@ -1451,10 +1668,12 @@ async function run(): Promise<void> {
             );
 
         try {
-            loadedRecordCount =
-                loadCheckpoint(
+            checkpointLoadResult =
+                loadCheckpointWithProgress(
                     marketDate
                 );
+            loadedRecordCount =
+                checkpointLoadResult.recordCount;
         } catch (error) {
             process.exitCode = 1;
 
@@ -1493,54 +1712,58 @@ async function run(): Promise<void> {
             `Found ${totalProducts} products`
         );
 
-        const automaticResumeIndex =
-            determineCheckpointResumeIndex(
-                products
+        const resumeSelection =
+            selectResumeStartIndex(
+                products,
+                checkpointLoadResult,
+                getRecords(),
+                process.env.START_PRODUCT_INDEX
             );
 
+        const automaticResumeIndex =
+            resumeSelection.automaticIndex;
         const requestedStartIndex =
-            readPositiveInteger(
-                process.env
-                    .START_PRODUCT_INDEX,
-                automaticResumeIndex
-            );
+            resumeSelection.selectedIndex;
 
         if (
-            process.env
-                .START_PRODUCT_INDEX
+            resumeSelection.source === "explicit"
         ) {
+            const overrideRelationship =
+                requestedStartIndex ===
+                automaticResumeIndex
+                    ? "matches"
+                    : "overrides";
+
             console.log(
                 `Using explicit START_PRODUCT_INDEX: ` +
-                `${requestedStartIndex}`
+                `${requestedStartIndex}. It ` +
+                `${overrideRelationship} the automatic ` +
+                `checkpoint index ` +
+                `${automaticResumeIndex}.`
             );
-        } else if (
-            loadedRecordCount > 0
-        ) {
+        } else if (resumeSelection.source !== "zero") {
             console.log(
                 `Automatic checkpoint resume index: ` +
                 `${automaticResumeIndex}`
             );
         }
 
+        const productRange = calculateProductRange(
+            requestedStartIndex,
+            totalProducts,
+            process.env.MAX_PRODUCTS
+        );
         const startProductIndex =
-            Math.min(
-                requestedStartIndex,
-                totalProducts
-            );
-
-        const requestedMaximumProducts =
-            readPositiveInteger(
-                process.env.MAX_PRODUCTS,
-                totalProducts -
-                    startProductIndex
-            );
-
+            productRange.startProductIndex;
         const endProductIndex =
-            Math.min(
-                totalProducts,
-                startProductIndex +
-                    requestedMaximumProducts
+            productRange.endProductIndex;
+
+        checkpointProgress =
+            createRunCheckpointProgress(
+                startProductIndex,
+                checkpointLoadResult.progress
             );
+        checkpointCanBeExported = true;
 
         const productsToProcess =
             endProductIndex -
@@ -1570,6 +1793,17 @@ async function run(): Promise<void> {
 
             const productStartedAt =
                 Date.now();
+
+            checkpointProgress =
+                markCheckpointProductActive(
+                    checkpointProgress,
+                    productIndex,
+                    productName
+                );
+            exportCheckpointWithProgress(
+                marketDate,
+                checkpointProgress
+            );
 
             console.log("");
             console.log(
@@ -1632,8 +1866,16 @@ async function run(): Promise<void> {
                         0
                     );
 
-                    exportCheckpoint(
-                        marketDate
+                    checkpointProgress =
+                        markCheckpointProductFinished(
+                            checkpointProgress,
+                            productIndex,
+                            productName,
+                            "UNAVAILABLE"
+                        );
+                    exportCheckpointWithProgress(
+                        marketDate,
+                        checkpointProgress
                     );
 
                     await restoreProductList(
@@ -1701,7 +1943,17 @@ async function run(): Promise<void> {
                         packageCount
                     );
 
-                    exportCheckpoint(marketDate);
+                    checkpointProgress =
+                        markCheckpointProductFinished(
+                            checkpointProgress,
+                            productIndex,
+                            productName,
+                            "SKIPPED"
+                        );
+                    exportCheckpointWithProgress(
+                        marketDate,
+                        checkpointProgress
+                    );
 
                     await restoreProductList(
                         page,
@@ -1998,11 +2250,21 @@ async function run(): Promise<void> {
                 }
             }
 
-            exportCheckpoint(marketDate);
-
             if (
                 productRecoveryFailed
             ) {
+                checkpointProgress =
+                    markCheckpointProductFinished(
+                        checkpointProgress,
+                        productIndex,
+                        productName,
+                        "SKIPPED"
+                    );
+                exportCheckpointWithProgress(
+                    marketDate,
+                    checkpointProgress
+                );
+
                 await restoreProductList(
                     page,
                     totalProducts
@@ -2023,6 +2285,18 @@ async function run(): Promise<void> {
 
                 continue;
             }
+
+            checkpointProgress =
+                markCheckpointProductFinished(
+                    checkpointProgress,
+                    productIndex,
+                    productName,
+                    "COMPLETED"
+                );
+            exportCheckpointWithProgress(
+                marketDate,
+                checkpointProgress
+            );
 
             await safelyReturnToProducts(
                 page,
@@ -2136,7 +2410,10 @@ async function run(): Promise<void> {
             "================================"
         );
 
-        exportCheckpoint(marketDate);
+        exportCheckpointWithProgress(
+            marketDate,
+            checkpointProgress
+        );
 
         const outputPath =
             exportRecordsToJson(marketDate);
@@ -2290,10 +2567,17 @@ async function run(): Promise<void> {
                     "Emergency checkpoint was not written " +
                     "because the market date was not detected."
                 );
+            } else if (!checkpointCanBeExported) {
+                console.log(
+                    "Emergency checkpoint was not written " +
+                    "because restored progress was not " +
+                    "validated against the product list."
+                );
             } else {
                 const checkpointPath =
-                    exportCheckpoint(
-                        marketDate
+                    exportCheckpointWithProgress(
+                        marketDate,
+                        checkpointProgress
                     );
 
                 console.log(
@@ -2321,26 +2605,28 @@ async function run(): Promise<void> {
     }
 }
 
-void run().catch(
-    (error: unknown): void => {
-        console.error("");
-        console.error(
-            "================================"
-        );
-        console.error(
-            "UNHANDLED SCRAPER FAILURE"
-        );
-        console.error(
-            "================================"
-        );
+if (require.main === module) {
+    void run().catch(
+        (error: unknown): void => {
+            console.error("");
+            console.error(
+                "================================"
+            );
+            console.error(
+                "UNHANDLED SCRAPER FAILURE"
+            );
+            console.error(
+                "================================"
+            );
 
-        console.error(error);
+            console.error(error);
 
-        /*
-         * This catches failures that happen before the main
-         * scraper try/catch is entered, including browser
-         * launch failures.
-         */
-        process.exitCode = 1;
-    }
-);
+            /*
+             * This catches failures that happen before the main
+             * scraper try/catch is entered, including browser
+             * launch failures.
+             */
+            process.exitCode = 1;
+        }
+    );
+}
