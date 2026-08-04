@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { parseTshwaneCheckpoint } from "./saver";
+
 interface RawMarketRecord {
     market: string;
     marketDate: string;
@@ -841,19 +843,15 @@ export function processMarketCheckpoint(
         );
     }
 
-    if (
-        !Array.isArray(
-            parsedFile
-        )
-    ) {
-        throw new Error(
-            `Checkpoint root must be an array: ` +
-            `${sourceFile}`
+    const checkpoint =
+        parseTshwaneCheckpoint(
+            parsedFile,
+            marketDate,
+            sourceFile
         );
-    }
 
     const rawRecords =
-        parsedFile.map(
+        checkpoint.records.map(
             (
                 value,
                 recordIndex
