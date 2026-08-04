@@ -18,6 +18,12 @@ const recordKeys =
 const DEFAULT_OUTPUT_DIRECTORY =
     "scraper-output";
 
+export interface ParsedTshwaneCheckpoint {
+    records: MarketRecord[];
+    format: "legacy-array" | "v1";
+    progress: TshwaneCheckpointProgress | null;
+}
+
 function getOutputDirectory(
     outputDirectory: string
 ): string {
@@ -348,60 +354,16 @@ export function loadCheckpointWithProgress(
         );
     }
 
-    let checkpointRecords: unknown[];
-    let format: "legacy-array" | "v1";
-    let progress:
-        TshwaneCheckpointProgress | null = null;
-
-    if (Array.isArray(parsedCheckpoint)) {
-        checkpointRecords = parsedCheckpoint;
-        format = "legacy-array";
-    } else {
-        if (!isObject(parsedCheckpoint)) {
-            throw new Error(
-                `Checkpoint JSON must contain a ` +
-                `legacy record array or a versioned ` +
-                `envelope: ${checkpointPath}`
-            );
-        }
-
-        if (parsedCheckpoint.version !== 1) {
-            throw new Error(
-                `Unsupported checkpoint version: ` +
-                `${String(parsedCheckpoint.version)}.`
-            );
-        }
-
-        if (
-            parsedCheckpoint.marketDate !==
-            marketDate
-        ) {
-            throw new Error(
-                `Checkpoint market date mismatch. ` +
-                `Expected ${marketDate}, found ` +
-                `${String(parsedCheckpoint.marketDate)}.`
-            );
-        }
-
-        if (!Array.isArray(parsedCheckpoint.records)) {
-            throw new Error(
-                "Checkpoint records must be an array."
-            );
-        }
-
-        validateCheckpointProgress(
-            parsedCheckpoint.progress
+    const checkpoint =
+        parseTshwaneCheckpoint(
+            parsedCheckpoint,
+            marketDate,
+            checkpointPath
         );
-
-        checkpointRecords = parsedCheckpoint.records;
-        progress = parsedCheckpoint.progress;
-        format = "v1";
-    }
 
     const duplicatesIgnored =
         restoreCheckpointRecords(
-            checkpointRecords,
-            marketDate
+            checkpoint.records
         );
 
     console.log(
@@ -425,8 +387,8 @@ export function loadCheckpointWithProgress(
 
     return {
         recordCount: records.length,
-        format,
-        progress
+        format: checkpoint.format,
+        progress: checkpoint.progress
     };
 }
 
@@ -776,9 +738,90 @@ function validateCheckpointProgress(
     }
 }
 
+export function parseTshwaneCheckpoint(
+    value: unknown,
+    marketDate: string,
+    sourceDescription = "checkpoint"
+): ParsedTshwaneCheckpoint {
+    validateMarketDate(marketDate);
+
+    let checkpointRecords: unknown[];
+    let format: "legacy-array" | "v1";
+    let progress:
+        TshwaneCheckpointProgress | null = null;
+
+    if (Array.isArray(value)) {
+        checkpointRecords = value;
+        format = "legacy-array";
+    } else {
+        if (!isObject(value)) {
+            throw new Error(
+                `Checkpoint JSON must contain a ` +
+                `legacy record array or a versioned ` +
+                `envelope: ${sourceDescription}`
+            );
+        }
+
+        if (value.version !== 1) {
+            throw new Error(
+                `Unsupported checkpoint version: ` +
+                `${String(value.version)}.`
+            );
+        }
+
+        if (value.marketDate !== marketDate) {
+            throw new Error(
+                `Checkpoint market date mismatch. ` +
+                `Expected ${marketDate}, found ` +
+                `${String(value.marketDate)}.`
+            );
+        }
+
+        if (!Array.isArray(value.records)) {
+            throw new Error(
+                "Checkpoint records must be an array."
+            );
+        }
+
+        validateCheckpointProgress(value.progress);
+
+        checkpointRecords = value.records;
+        progress = value.progress;
+        format = "v1";
+    }
+
+    const validatedRecords =
+        checkpointRecords.map(
+            (candidate, recordIndex) => {
+                if (!isMarketRecord(candidate)) {
+                    throw new Error(
+                        `Invalid market record at ` +
+                        `checkpoint index ${recordIndex}.`
+                    );
+                }
+
+                if (candidate.marketDate !== marketDate) {
+                    throw new Error(
+                        `Checkpoint market date mismatch at ` +
+                        `record ${recordIndex}. Expected ` +
+                        `${marketDate}, found ` +
+                        `${candidate.marketDate}.`
+                    );
+                }
+
+                return candidate;
+            }
+        );
+
+    return {
+        records: validatedRecords,
+        format,
+        progress
+    };
+}
+
 function restoreCheckpointRecords(
-    checkpointRecords: unknown[],
-    marketDate: string
+    checkpointRecords: MarketRecord[]
 ): number {
     let duplicatesIgnored = 0;
 
@@ -789,22 +832,6 @@ function restoreCheckpointRecords(
     ) {
         const candidate =
             checkpointRecords[recordIndex];
-
-        if (!isMarketRecord(candidate)) {
-            throw new Error(
-                `Invalid market record at ` +
-                `checkpoint index ${recordIndex}.`
-            );
-        }
-
-        if (candidate.marketDate !== marketDate) {
-            throw new Error(
-                `Checkpoint market date mismatch at ` +
-                `record ${recordIndex}. Expected ` +
-                `${marketDate}, found ` +
-                `${candidate.marketDate}.`
-            );
-        }
 
         if (!addRecordIfUnique(candidate)) {
             duplicatesIgnored++;
