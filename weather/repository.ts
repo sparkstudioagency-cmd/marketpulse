@@ -12,8 +12,9 @@ import {
   validateWeatherDataPointInput,
 } from "./validation";
 
-type DatabaseValue = string | number | boolean | null | JsonObject;
-type DatabaseRow = Record<string, DatabaseValue>;
+export type WeatherDatabaseValue =
+  string | number | boolean | null | JsonObject;
+export type WeatherDatabaseRow = Record<string, WeatherDatabaseValue>;
 
 export interface WeatherPointQuery {
   readonly productionRegionId: number;
@@ -26,22 +27,22 @@ export interface WeatherDatabaseClient {
   selectProductionRegions(filter: {
     readonly id?: number;
     readonly isActive?: boolean;
-  }): Promise<readonly DatabaseRow[]>;
+  }): Promise<readonly WeatherDatabaseRow[]>;
 
   selectProductProductionRegions(filter: {
     readonly productId?: number;
     readonly productionRegionId?: number;
     readonly isActive: boolean;
-  }): Promise<readonly DatabaseRow[]>;
+  }): Promise<readonly WeatherDatabaseRow[]>;
 
   upsertWeatherDataPoints(
-    rows: readonly DatabaseRow[],
+    rows: readonly WeatherDatabaseRow[],
     options: { readonly onConflict: string },
-  ): Promise<readonly DatabaseRow[]>;
+  ): Promise<readonly WeatherDatabaseRow[]>;
 
   selectWeatherDataPoints(
     query: WeatherPointQuery,
-  ): Promise<readonly DatabaseRow[]>;
+  ): Promise<readonly WeatherDatabaseRow[]>;
 }
 
 export type WeatherRepositoryErrorCode =
@@ -98,7 +99,7 @@ function databaseFailure(operation: string, cause: unknown): WeatherRepositoryEr
   );
 }
 
-function requiredNumber(row: DatabaseRow, key: string): number {
+function requiredNumber(row: WeatherDatabaseRow, key: string): number {
   const value = row[key];
   if (typeof value !== "number") {
     throw new Error(`Invalid database number column: ${key}.`);
@@ -106,7 +107,7 @@ function requiredNumber(row: DatabaseRow, key: string): number {
   return value;
 }
 
-function nullableNumber(row: DatabaseRow, key: string): number | null {
+function nullableNumber(row: WeatherDatabaseRow, key: string): number | null {
   const value = row[key];
   if (value === null) return null;
   if (typeof value !== "number") {
@@ -115,7 +116,7 @@ function nullableNumber(row: DatabaseRow, key: string): number | null {
   return value;
 }
 
-function requiredString(row: DatabaseRow, key: string): string {
+function requiredString(row: WeatherDatabaseRow, key: string): string {
   const value = row[key];
   if (typeof value !== "string") {
     throw new Error(`Invalid database string column: ${key}.`);
@@ -123,7 +124,7 @@ function requiredString(row: DatabaseRow, key: string): string {
   return value;
 }
 
-function nullableString(row: DatabaseRow, key: string): string | null {
+function nullableString(row: WeatherDatabaseRow, key: string): string | null {
   const value = row[key];
   if (value === null) return null;
   if (typeof value !== "string") {
@@ -132,7 +133,7 @@ function nullableString(row: DatabaseRow, key: string): string | null {
   return value;
 }
 
-function requiredBoolean(row: DatabaseRow, key: string): boolean {
+function requiredBoolean(row: WeatherDatabaseRow, key: string): boolean {
   const value = row[key];
   if (typeof value !== "boolean") {
     throw new Error(`Invalid database boolean column: ${key}.`);
@@ -140,7 +141,7 @@ function requiredBoolean(row: DatabaseRow, key: string): boolean {
   return value;
 }
 
-function requiredJsonObject(row: DatabaseRow, key: string): JsonObject {
+function requiredJsonObject(row: WeatherDatabaseRow, key: string): JsonObject {
   const value = row[key];
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`Invalid database JSON object column: ${key}.`);
@@ -148,7 +149,7 @@ function requiredJsonObject(row: DatabaseRow, key: string): JsonObject {
   return value;
 }
 
-function mapProductionRegion(row: DatabaseRow): ProductionRegion {
+function mapProductionRegion(row: WeatherDatabaseRow): ProductionRegion {
   return {
     id: requiredNumber(row, "id"),
     code: requiredString(row, "code"),
@@ -166,7 +167,7 @@ function mapProductionRegion(row: DatabaseRow): ProductionRegion {
 }
 
 function mapProductProductionRegion(
-  row: DatabaseRow,
+  row: WeatherDatabaseRow,
 ): ProductProductionRegion {
   return {
     id: requiredNumber(row, "id"),
@@ -181,7 +182,7 @@ function mapProductProductionRegion(
   };
 }
 
-function mapWeatherDataPoint(row: DatabaseRow): WeatherDataPoint {
+function mapWeatherDataPoint(row: WeatherDatabaseRow): WeatherDataPoint {
   return {
     id: requiredNumber(row, "id"),
     provider: requiredString(row, "provider"),
@@ -209,7 +210,9 @@ function mapWeatherDataPoint(row: DatabaseRow): WeatherDataPoint {
   };
 }
 
-function toWeatherDataPointRow(point: CreateWeatherDataPointInput): DatabaseRow {
+function toWeatherDataPointRow(
+  point: CreateWeatherDataPointInput,
+): WeatherDatabaseRow {
   return {
     provider: point.provider,
     production_region_id: point.productionRegionId,
@@ -304,8 +307,8 @@ export function createWeatherRepository(
 ): WeatherRepository {
   async function readRows<T>(
     operation: string,
-    query: () => Promise<readonly DatabaseRow[]>,
-    mapper: (row: DatabaseRow) => T,
+    query: () => Promise<readonly WeatherDatabaseRow[]>,
+    mapper: (row: WeatherDatabaseRow) => T,
   ): Promise<readonly T[]> {
     try {
       return (await query()).map(mapper);
