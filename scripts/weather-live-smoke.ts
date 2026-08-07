@@ -3,6 +3,7 @@ import process from "node:process";
 
 import { createWeatherRepository } from "../weather/repository";
 import {
+  formatLiveWeatherSmokeDiagnostics,
   LIVE_WEATHER_SMOKE_PROVIDER,
   validateLiveWeatherSmokeEnvironment,
   validateOwnedSmokeRows,
@@ -208,5 +209,8 @@ run().catch((error: unknown) => {
   console.error(
     error instanceof Error ? error.message : "Live weather smoke test failed.",
   );
+  for (const line of formatLiveWeatherSmokeDiagnostics(error)) {
+    console.error(line);
+  }
   process.exitCode = 1;
 });

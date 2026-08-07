@@ -1,4 +1,6 @@
 import type { SupabaseAdminCredentials, SupabaseEnvironment } from "./supabase-admin-client";
+import { WeatherRepositoryError } from "./repository";
+import { SupabaseWeatherDatabaseClientError } from "./supabase-database-client";
 
 export const LIVE_WEATHER_SMOKE_PROVIDER =
   "marketpulse-live-smoke-test";
@@ -13,6 +15,27 @@ export interface OwnedSmokeRow {
   readonly id: number;
   readonly provider: typeof LIVE_WEATHER_SMOKE_PROVIDER;
   readonly rawPayload: { readonly smokeRunId: string };
+}
+
+export function formatLiveWeatherSmokeDiagnostics(
+  error: unknown,
+): readonly string[] {
+  if (!(error instanceof WeatherRepositoryError)) return [];
+
+  const lines = [`Repository error code: ${error.code}`];
+  const nested = error.cause;
+  if (nested instanceof SupabaseWeatherDatabaseClientError) {
+    lines.push(
+      `Adapter error code: ${nested.code}`,
+      `Database code: ${nested.databaseCode ?? "none"}`,
+      `Operation: ${nested.operation}`,
+      `Table: ${nested.table}`,
+    );
+  } else if (nested instanceof Error) {
+    lines.push("Nested error type: Error");
+  }
+
+  return lines;
 }
 
 function required(
