@@ -107,13 +107,27 @@ function requiredNumber(row: WeatherDatabaseRow, key: string): number {
   return value;
 }
 
-function nullableNumber(row: WeatherDatabaseRow, key: string): number | null {
+// PostgreSQL numeric output uses an integer digit and expanded decimal form;
+// fraction-only and exponent forms are intentionally outside this boundary.
+const POSTGRES_NUMERIC_DECIMAL = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
+
+function databaseNumeric(row: WeatherDatabaseRow, key: string): number {
   const value = row[key];
-  if (value === null) return null;
-  if (typeof value !== "number") {
-    throw new Error(`Invalid database nullable number column: ${key}.`);
+  if (typeof value === "number") {
+    if (Number.isFinite(value)) return value;
+  } else if (typeof value === "string" && POSTGRES_NUMERIC_DECIMAL.test(value)) {
+    const converted = Number(value);
+    if (Number.isFinite(converted)) return converted;
   }
-  return value;
+  throw new Error(`Invalid database numeric column: ${key}.`);
+}
+
+function nullableDatabaseNumeric(
+  row: WeatherDatabaseRow,
+  key: string,
+): number | null {
+  if (row[key] === null) return null;
+  return databaseNumeric(row, key);
 }
 
 function requiredString(row: WeatherDatabaseRow, key: string): string {
@@ -156,9 +170,9 @@ function mapProductionRegion(row: WeatherDatabaseRow): ProductionRegion {
     name: requiredString(row, "name"),
     province: requiredString(row, "province"),
     country: requiredString(row, "country"),
-    latitude: requiredNumber(row, "latitude"),
-    longitude: requiredNumber(row, "longitude"),
-    radiusKm: nullableNumber(row, "radius_km"),
+    latitude: databaseNumeric(row, "latitude"),
+    longitude: databaseNumeric(row, "longitude"),
+    radiusKm: nullableDatabaseNumeric(row, "radius_km"),
     timezone: requiredString(row, "timezone"),
     isActive: requiredBoolean(row, "is_active"),
     createdAt: requiredString(row, "created_at"),
@@ -173,8 +187,8 @@ function mapProductProductionRegion(
     id: requiredNumber(row, "id"),
     productId: requiredNumber(row, "product_id"),
     productionRegionId: requiredNumber(row, "production_region_id"),
-    importanceWeight: nullableNumber(row, "importance_weight"),
-    confidence: nullableNumber(row, "confidence"),
+    importanceWeight: nullableDatabaseNumeric(row, "importance_weight"),
+    confidence: nullableDatabaseNumeric(row, "confidence"),
     notes: nullableString(row, "notes"),
     isActive: requiredBoolean(row, "is_active"),
     createdAt: requiredString(row, "created_at"),
@@ -192,16 +206,16 @@ function mapWeatherDataPoint(row: WeatherDatabaseRow): WeatherDataPoint {
     providerRecordId: nullableString(row, "provider_record_id"),
     validAt: requiredString(row, "valid_at"),
     forecastIssuedAt: nullableString(row, "forecast_issued_at"),
-    temperatureC: nullableNumber(row, "temperature_c"),
-    minimumTemperatureC: nullableNumber(row, "minimum_temperature_c"),
-    maximumTemperatureC: nullableNumber(row, "maximum_temperature_c"),
-    precipitationMm: nullableNumber(row, "precipitation_mm"),
-    precipitationProbability: nullableNumber(
+    temperatureC: nullableDatabaseNumeric(row, "temperature_c"),
+    minimumTemperatureC: nullableDatabaseNumeric(row, "minimum_temperature_c"),
+    maximumTemperatureC: nullableDatabaseNumeric(row, "maximum_temperature_c"),
+    precipitationMm: nullableDatabaseNumeric(row, "precipitation_mm"),
+    precipitationProbability: nullableDatabaseNumeric(
       row,
       "precipitation_probability",
     ),
-    humidityPercent: nullableNumber(row, "humidity_percent"),
-    windSpeedKph: nullableNumber(row, "wind_speed_kph"),
+    humidityPercent: nullableDatabaseNumeric(row, "humidity_percent"),
+    windSpeedKph: nullableDatabaseNumeric(row, "wind_speed_kph"),
     conditionCode: nullableString(row, "condition_code"),
     conditionText: nullableString(row, "condition_text"),
     rawPayload: requiredJsonObject(row, "raw_payload"),
