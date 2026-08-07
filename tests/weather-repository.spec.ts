@@ -69,6 +69,32 @@ function pointInput(
   };
 }
 
+function weatherRow(overrides: Partial<Row> = {}): Row {
+  return {
+    id: 1,
+    provider: "provider-a",
+    production_region_id: 1,
+    data_kind: "forecast",
+    provider_location_id: "location-a",
+    provider_record_id: "record-a",
+    valid_at: "2026-08-05T09:00:00Z",
+    forecast_issued_at: "2026-08-04T06:00:00Z",
+    temperature_c: 25,
+    minimum_temperature_c: 20,
+    maximum_temperature_c: 30,
+    precipitation_mm: 0,
+    precipitation_probability: 10,
+    humidity_percent: 50,
+    wind_speed_kph: 5,
+    condition_code: "clear",
+    condition_text: "Clear",
+    raw_payload: { source: "fake" },
+    collected_at: "2026-08-04T06:05:00Z",
+    created_at: "2026-08-04T06:06:00Z",
+    ...overrides,
+  };
+}
+
 function identity(row: Row): string {
   return JSON.stringify([
     row.provider,
@@ -216,6 +242,126 @@ test("maps camel-case inputs to exact database columns and rows back", async () 
     dataKind: "forecast",
     precipitationProbability: 10,
   });
+});
+
+test("maps every weather PostgreSQL numeric string to a domain number", async () => {
+  const database = new FakeWeatherDatabase();
+  database.points = [
+    weatherRow({
+      temperature_c: "24.00",
+      minimum_temperature_c: "18.00",
+      maximum_temperature_c: "28.00",
+      precipitation_mm: "0.000",
+      precipitation_probability: "10.00",
+      humidity_percent: "50.00",
+      wind_speed_kph: "8.00",
+    }),
+  ];
+  const repository = createWeatherRepository(database);
+
+  const points = await repository.getWeatherPoints({
+    productionRegionId: 1,
+    dataKind: "forecast",
+    startAt: "2026-08-05T00:00:00Z",
+    endAt: "2026-08-06T00:00:00Z",
+  });
+
+  expect(points[0]).toMatchObject({
+    temperatureC: 24,
+    minimumTemperatureC: 18,
+    maximumTemperatureC: 28,
+    precipitationMm: 0,
+    precipitationProbability: 10,
+    humidityPercent: 50,
+    windSpeedKph: 8,
+  });
+});
+
+test("maps production-region and mapping PostgreSQL numeric strings", async () => {
+  const database = new FakeWeatherDatabase();
+  database.regions = [
+    regionRow({
+      latitude: "-25.678200",
+      longitude: "27.829100",
+      radius_km: "35.00",
+    }),
+  ];
+  database.mappings = [
+    mappingRow({ importance_weight: "0.8000", confidence: "0.9000" }),
+  ];
+  const repository = createWeatherRepository(database);
+
+  await expect(repository.listActiveProductionRegions()).resolves.toMatchObject([
+    { latitude: -25.6782, longitude: 27.8291, radiusKm: 35 },
+  ]);
+  await expect(repository.listActiveMappingsByProductId(10)).resolves.toMatchObject([
+    { importanceWeight: 0.8, confidence: 0.9 },
+  ]);
+});
+
+test("preserves nullable database numerics and accepts negative and zero decimals", async () => {
+  const database = new FakeWeatherDatabase();
+  database.regions = [regionRow({ radius_km: null })];
+  database.mappings = [
+    mappingRow({ importance_weight: null, confidence: null }),
+  ];
+  database.points = [
+    weatherRow({
+      temperature_c: "-2.50",
+      precipitation_mm: "0.000",
+      minimum_temperature_c: null,
+      maximum_temperature_c: null,
+    }),
+  ];
+  const repository = createWeatherRepository(database);
+
+  expect((await repository.listActiveProductionRegions())[0].radiusKm).toBeNull();
+  expect((await repository.listActiveMappingsByProductId(10))[0]).toMatchObject({
+    importanceWeight: null,
+    confidence: null,
+  });
+  expect((await repository.getWeatherPoints({
+    productionRegionId: 1,
+    startAt: "2026-08-05T00:00:00Z",
+    endAt: "2026-08-06T00:00:00Z",
+  }))[0]).toMatchObject({
+    temperatureC: -2.5,
+    precipitationMm: 0,
+    minimumTemperatureC: null,
+    maximumTemperatureC: null,
+  });
+});
+
+test("strictly rejects malformed PostgreSQL numeric representations", async () => {
+  const invalidValues: unknown[] = [
+    "",
+    "   ",
+    "NaN",
+    "Infinity",
+    "-Infinity",
+    "weather",
+    "24abc",
+    "0x18",
+    ".5",
+    "1e2",
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    [],
+    {},
+    true,
+  ];
+
+  for (const invalid of invalidValues) {
+    const database = new FakeWeatherDatabase();
+    const row = regionRow();
+    (row as Record<string, unknown>).latitude = invalid;
+    database.regions = [row];
+
+    await expect(
+      createWeatherRepository(database).listActiveProductionRegions(),
+    ).rejects.toMatchObject({ code: "database_failure" });
+  }
 });
 
 test("same revision retries idempotently while distinct issues remain", async () => {
