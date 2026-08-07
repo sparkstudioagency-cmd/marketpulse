@@ -1,10 +1,13 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  formatLiveWeatherSmokeDiagnostics,
   LIVE_WEATHER_SMOKE_PROVIDER,
   validateLiveWeatherSmokeEnvironment,
   validateOwnedSmokeRows,
 } from "../weather/live-smoke-safety";
+import { WeatherRepositoryError } from "../weather/repository";
+import { SupabaseWeatherDatabaseClientError } from "../weather/supabase-database-client";
 
 const SECRET = "service-role-secret-that-must-not-leak";
 
@@ -137,4 +140,107 @@ test("accepts exactly the owned smoke rows without network access", () => {
       { id: 7, provider: LIVE_WEATHER_SMOKE_PROVIDER, rawPayload: { smokeRunId: "run-1" } },
       { id: 9, provider: LIVE_WEATHER_SMOKE_PROVIDER, rawPayload: { smokeRunId: "run-1" } },
     ]);
+});
+
+test("formats only the repository error code without a nested cause", () => {
+  const error = new WeatherRepositoryError(
+    "database_failure",
+    "Safe outer message.",
+  );
+
+  expect(formatLiveWeatherSmokeDiagnostics(error)).toEqual([
+    "Repository error code: database_failure",
+  ]);
+});
+
+test("formats exactly the allow-listed adapter diagnostics", () => {
+  const adapterError = new SupabaseWeatherDatabaseClientError(
+    "query_failed",
+    "upsert",
+    "weather_data_points",
+    "23505",
+  );
+  const error = new WeatherRepositoryError(
+    "database_failure",
+    "Safe outer message.",
+    { cause: adapterError },
+  );
+
+  expect(formatLiveWeatherSmokeDiagnostics(error)).toEqual([
+    "Repository error code: database_failure",
+    "Adapter error code: query_failed",
+    "Database code: 23505",
+    "Operation: upsert",
+    "Table: weather_data_points",
+  ]);
+});
+
+test("formats an undefined adapter database code as none", () => {
+  const adapterError = new SupabaseWeatherDatabaseClientError(
+    "missing_data",
+    "upsert",
+    "weather_data_points",
+  );
+  const error = new WeatherRepositoryError(
+    "database_failure",
+    "Safe outer message.",
+    { cause: adapterError },
+  );
+
+  expect(formatLiveWeatherSmokeDiagnostics(error)).toContain(
+    "Database code: none",
+  );
+});
+
+test("does not expose raw nested messages or injected secrets", () => {
+  const nestedSecret = "nested-raw-secret";
+  const error = new WeatherRepositoryError(
+    "database_failure",
+    "Safe outer message.",
+    { cause: new Error(`private database message ${nestedSecret}`) },
+  );
+  const lines = formatLiveWeatherSmokeDiagnostics(error);
+
+  expect(lines).toEqual([
+    "Repository error code: database_failure",
+    "Nested error type: Error",
+  ]);
+  expect(lines.join("\n")).not.toContain(nestedSecret);
+  expect(lines.join("\n")).not.toContain("private database message");
+});
+
+test("ignores an adapter error's underlying raw cause", () => {
+  const secret = "adapter-underlying-secret";
+  const adapterError = new SupabaseWeatherDatabaseClientError(
+    "query_failed",
+    "upsert",
+    "weather_data_points",
+    "PGRST204",
+  );
+  Object.defineProperty(adapterError, "cause", {
+    value: new Error(`raw Supabase message ${secret}`),
+  });
+  const error = new WeatherRepositoryError(
+    "database_failure",
+    "Safe outer message.",
+    { cause: adapterError },
+  );
+  const output = formatLiveWeatherSmokeDiagnostics(error).join("\n");
+
+  expect(output).not.toContain(secret);
+  expect(output).not.toContain("raw Supabase message");
+  expect(output).toContain("Database code: PGRST204");
+});
+
+test("does not expose arbitrary unknown error contents", () => {
+  const secret = "arbitrary-secret";
+  for (const error of [
+    secret,
+    { message: secret, code: secret, details: secret },
+    new Error(secret),
+    null,
+    undefined,
+  ]) {
+    expect(formatLiveWeatherSmokeDiagnostics(error)).toEqual([]);
+  }
 });
