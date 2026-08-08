@@ -114,6 +114,7 @@ class FakeWeatherDatabase implements WeatherDatabaseClient {
   lastConflict = "";
   failOperation: string | null = null;
   nextId = 1;
+  upsertReturnTransform: ((row: Row) => Row) | null = null;
 
   async selectProductionRegions(filter: {
     readonly id?: number;
@@ -167,7 +168,7 @@ class FakeWeatherDatabase implements WeatherDatabaseClient {
         const existing = this.points[existingIndex];
         const updated = { ...existing, ...incoming, id: existing.id };
         this.points[existingIndex] = updated;
-        return updated;
+        return this.upsertReturnTransform?.(updated) ?? updated;
       }
 
       const inserted: Row = {
@@ -176,7 +177,7 @@ class FakeWeatherDatabase implements WeatherDatabaseClient {
         created_at: "2026-08-04T06:06:00Z",
       };
       this.points.push(inserted);
-      return inserted;
+      return this.upsertReturnTransform?.(inserted) ?? inserted;
     });
   }
 
@@ -275,6 +276,139 @@ test("maps every weather PostgreSQL numeric string to a domain number", async ()
     humidityPercent: 50,
     windSpeedKph: 8,
   });
+});
+
+test("maps the complete live PostgREST upsert response to its submitted identity", async () => {
+  const smokeRunId = "3c9b0c9b-c262-49de-8fe2-a45a4f622e4a";
+  const database = new FakeWeatherDatabase();
+  database.nextId = 3;
+  database.upsertReturnTransform = (row) => ({
+    ...row,
+    valid_at: "2026-08-08T05:22:44.301+00:00",
+    forecast_issued_at: "2026-08-07T23:22:44.301+00:00",
+    temperature_c: "24.00",
+    minimum_temperature_c: "18.00",
+    maximum_temperature_c: "28.00",
+    precipitation_mm: "0.000",
+    precipitation_probability: "10.00",
+    humidity_percent: "50.00",
+    wind_speed_kph: "8.00",
+    collected_at: "2026-08-07T23:22:44.302+00:00",
+    created_at: "2026-08-07T23:22:44.964218+00:00",
+  });
+  const repository = createWeatherRepository(database);
+  const input = pointInput({
+    provider: "marketpulse-live-smoke-test",
+    providerLocationId: "ZA-NW-BRITS-HARTIES",
+    providerRecordId: `smoke-${smokeRunId}-initial`,
+    validAt: "2026-08-08T05:22:44.301Z",
+    forecastIssuedAt: "2026-08-07T23:22:44.301Z",
+    temperatureC: 24,
+    minimumTemperatureC: 18,
+    maximumTemperatureC: 28,
+    precipitationMm: 0,
+    precipitationProbability: 10,
+    humidityPercent: 50,
+    windSpeedKph: 8,
+    conditionCode: "synthetic-clear",
+    conditionText: "Synthetic smoke-test forecast",
+    rawPayload: { synthetic: true, smokeRunId },
+    collectedAt: "2026-08-07T23:22:44.302Z",
+  });
+
+  const saved = await repository.upsertWeatherDataPoint(input);
+
+  expect(saved).toMatchObject({
+    id: 3,
+    provider: input.provider,
+    productionRegionId: input.productionRegionId,
+    dataKind: input.dataKind,
+    providerLocationId: input.providerLocationId,
+    providerRecordId: input.providerRecordId,
+    validAt: input.validAt,
+    forecastIssuedAt: input.forecastIssuedAt,
+    temperatureC: 24,
+    minimumTemperatureC: 18,
+    maximumTemperatureC: 28,
+    precipitationMm: 0,
+    precipitationProbability: 10,
+    humidityPercent: 50,
+    windSpeedKph: 8,
+    rawPayload: { synthetic: true, smokeRunId },
+    collectedAt: "2026-08-07T23:22:44.302Z",
+    createdAt: "2026-08-07T23:22:44.964Z",
+  });
+  expect([
+    saved.provider,
+    saved.productionRegionId,
+    saved.dataKind,
+    saved.validAt,
+    saved.forecastIssuedAt,
+  ]).toEqual([
+    input.provider,
+    input.productionRegionId,
+    input.dataKind,
+    input.validAt,
+    input.forecastIssuedAt,
+  ]);
+});
+
+test("normalizes timezone-qualified database timestamps consistently", async () => {
+  const database = new FakeWeatherDatabase();
+  database.regions = [
+    regionRow({
+      created_at: "2026-08-08T05:22:44.301Z",
+      updated_at: "2026-08-08T07:22:44.301+02:00",
+    }),
+  ];
+  database.mappings = [
+    mappingRow({
+      created_at: "2026-08-08T05:22:44.301+00:00",
+      updated_at: "2026-08-08T05:22:44.301Z",
+    }),
+  ];
+  database.points = [
+    weatherRow({
+      data_kind: "observation",
+      forecast_issued_at: null,
+    }),
+  ];
+  const repository = createWeatherRepository(database);
+
+  const region = (await repository.listActiveProductionRegions())[0];
+  expect(region.createdAt).toBe("2026-08-08T05:22:44.301Z");
+  expect(region.updatedAt).toBe("2026-08-08T05:22:44.301Z");
+  const mapping = (await repository.listActiveMappingsByProductId(10))[0];
+  expect(mapping.createdAt).toBe("2026-08-08T05:22:44.301Z");
+  expect(mapping.updatedAt).toBe("2026-08-08T05:22:44.301Z");
+  const point = (await repository.getWeatherPoints({
+    productionRegionId: 1,
+    startAt: "2026-08-05T00:00:00Z",
+    endAt: "2026-08-06T00:00:00Z",
+  }))[0];
+  expect(point.forecastIssuedAt).toBeNull();
+});
+
+test("rejects invalid or timezone-less database timestamps", async () => {
+  const invalidValues: unknown[] = [
+    "2026-08-08T05:22:44.301",
+    "2026-02-30T05:22:44.301Z",
+    "not-a-timestamp",
+    "",
+    "   ",
+    123,
+  ];
+
+  for (const invalid of invalidValues) {
+    const database = new FakeWeatherDatabase();
+    const row = regionRow();
+    (row as Record<string, unknown>).created_at = invalid;
+    database.regions = [row];
+
+    await expect(
+      createWeatherRepository(database).listActiveProductionRegions(),
+    ).rejects.toMatchObject({ code: "database_failure" });
+  }
 });
 
 test("maps production-region and mapping PostgreSQL numeric strings", async () => {

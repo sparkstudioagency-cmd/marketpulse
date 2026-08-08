@@ -91,6 +91,24 @@ export interface WeatherRepository {
 const WEATHER_IDENTITY_COLUMNS =
   "provider,production_region_id,data_kind,valid_at,forecast_issued_at";
 
+function weatherIdentityKey(point: {
+  readonly provider: string;
+  readonly productionRegionId: number;
+  readonly dataKind: WeatherDataKind;
+  readonly validAt: string;
+  readonly forecastIssuedAt: string | null;
+}): string {
+  return JSON.stringify([
+    point.provider,
+    point.productionRegionId,
+    point.dataKind,
+    new Date(point.validAt).toISOString(),
+    point.forecastIssuedAt === null
+      ? null
+      : new Date(point.forecastIssuedAt).toISOString(),
+  ]);
+}
+
 function databaseFailure(operation: string, cause: unknown): WeatherRepositoryError {
   return new WeatherRepositoryError(
     "database_failure",
@@ -147,6 +165,26 @@ function nullableString(row: WeatherDatabaseRow, key: string): string | null {
   return value;
 }
 
+function databaseTimestamp(row: WeatherDatabaseRow, key: string): string {
+  const value = row[key];
+  if (!isTimezoneAwareIsoTimestamp(value)) {
+    throw new Error(`Invalid database timestamp column: ${key}.`);
+  }
+  const milliseconds = Date.parse(value);
+  if (!Number.isFinite(milliseconds)) {
+    throw new Error(`Invalid database timestamp column: ${key}.`);
+  }
+  return new Date(milliseconds).toISOString();
+}
+
+function nullableDatabaseTimestamp(
+  row: WeatherDatabaseRow,
+  key: string,
+): string | null {
+  if (row[key] === null) return null;
+  return databaseTimestamp(row, key);
+}
+
 function requiredBoolean(row: WeatherDatabaseRow, key: string): boolean {
   const value = row[key];
   if (typeof value !== "boolean") {
@@ -175,8 +213,8 @@ function mapProductionRegion(row: WeatherDatabaseRow): ProductionRegion {
     radiusKm: nullableDatabaseNumeric(row, "radius_km"),
     timezone: requiredString(row, "timezone"),
     isActive: requiredBoolean(row, "is_active"),
-    createdAt: requiredString(row, "created_at"),
-    updatedAt: requiredString(row, "updated_at"),
+    createdAt: databaseTimestamp(row, "created_at"),
+    updatedAt: databaseTimestamp(row, "updated_at"),
   };
 }
 
@@ -191,8 +229,8 @@ function mapProductProductionRegion(
     confidence: nullableDatabaseNumeric(row, "confidence"),
     notes: nullableString(row, "notes"),
     isActive: requiredBoolean(row, "is_active"),
-    createdAt: requiredString(row, "created_at"),
-    updatedAt: requiredString(row, "updated_at"),
+    createdAt: databaseTimestamp(row, "created_at"),
+    updatedAt: databaseTimestamp(row, "updated_at"),
   };
 }
 
@@ -204,8 +242,8 @@ function mapWeatherDataPoint(row: WeatherDatabaseRow): WeatherDataPoint {
     dataKind: requiredString(row, "data_kind") as WeatherDataKind,
     providerLocationId: nullableString(row, "provider_location_id"),
     providerRecordId: nullableString(row, "provider_record_id"),
-    validAt: requiredString(row, "valid_at"),
-    forecastIssuedAt: nullableString(row, "forecast_issued_at"),
+    validAt: databaseTimestamp(row, "valid_at"),
+    forecastIssuedAt: nullableDatabaseTimestamp(row, "forecast_issued_at"),
     temperatureC: nullableDatabaseNumeric(row, "temperature_c"),
     minimumTemperatureC: nullableDatabaseNumeric(row, "minimum_temperature_c"),
     maximumTemperatureC: nullableDatabaseNumeric(row, "maximum_temperature_c"),
@@ -219,8 +257,8 @@ function mapWeatherDataPoint(row: WeatherDatabaseRow): WeatherDataPoint {
     conditionCode: nullableString(row, "condition_code"),
     conditionText: nullableString(row, "condition_text"),
     rawPayload: requiredJsonObject(row, "raw_payload"),
-    collectedAt: requiredString(row, "collected_at"),
-    createdAt: requiredString(row, "created_at"),
+    collectedAt: databaseTimestamp(row, "collected_at"),
+    createdAt: databaseTimestamp(row, "created_at"),
   };
 }
 
@@ -444,27 +482,10 @@ export function createWeatherRepository(
         );
         const mapped = rows.map(mapWeatherDataPoint);
         const byIdentity = new Map(
-          mapped.map((point) => [
-            JSON.stringify([
-              point.provider,
-              point.productionRegionId,
-              point.dataKind,
-              point.validAt,
-              point.forecastIssuedAt,
-            ]),
-            point,
-          ]),
+          mapped.map((point) => [weatherIdentityKey(point), point]),
         );
         return normalized.map((point) => {
-          const saved = byIdentity.get(
-            JSON.stringify([
-              point.provider,
-              point.productionRegionId,
-              point.dataKind,
-              point.validAt,
-              point.forecastIssuedAt,
-            ]),
-          );
+          const saved = byIdentity.get(weatherIdentityKey(point));
           if (!saved) throw new Error("Database did not return an upserted row.");
           return saved;
         });
