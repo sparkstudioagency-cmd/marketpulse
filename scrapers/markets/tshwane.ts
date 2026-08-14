@@ -700,6 +700,27 @@ export function selectResumeStartIndex(
     existingRecords: MarketRecord[],
     explicitStartValue?: string
 ): ResumeSelection {
+    const explicitIndex =
+        explicitStartValue === undefined
+            ? -1
+            : readPositiveInteger(
+                explicitStartValue,
+                -1
+            );
+
+    /*
+     * An explicit zero is a deliberate full replay.
+     * Restored records remain loaded, but old product
+     * positions are not used as a resume cursor.
+     */
+    if (explicitIndex === 0) {
+        return {
+            automaticIndex: 0,
+            selectedIndex: 0,
+            source: "explicit"
+        };
+    }
+
     let automaticIndex = 0;
     let automaticSource:
         "v1" | "legacy" | "zero" = "zero";
@@ -724,19 +745,12 @@ export function selectResumeStartIndex(
         automaticSource = "legacy";
     }
 
-    if (explicitStartValue !== undefined) {
-        const explicitIndex = readPositiveInteger(
-            explicitStartValue,
-            -1
-        );
-
-        if (explicitIndex >= 0) {
-            return {
-                automaticIndex,
-                selectedIndex: explicitIndex,
-                source: "explicit"
-            };
-        }
+    if (explicitIndex >= 0) {
+        return {
+            automaticIndex,
+            selectedIndex: explicitIndex,
+            source: "explicit"
+        };
     }
 
     return {
