@@ -13,6 +13,10 @@ import {
     saveRecord
 } from "../scrapers/engine/saver";
 import {
+    createRunCheckpointProgress,
+    selectResumeStartIndex
+} from "../scrapers/markets/tshwane";
+import {
     MarketRecord,
     TshwaneCheckpointProgress
 } from "../scrapers/engine/types";
@@ -228,6 +232,93 @@ test("suppresses checkpoint and subsequently saved duplicates", () => {
 
     expect(result.recordCount).toBe(1);
     expect(getRecords()).toHaveLength(1);
+});
+
+test("full replay retains restored records and resets only progress", () => {
+    const outputDirectory = createOutputDirectory();
+    const restoredRecord = createRecord();
+    const staleProgress: TshwaneCheckpointProgress = {
+        nextProductIndex: 2,
+        activeProduct: null,
+        lastFinishedProduct: {
+            index: 1,
+            name: "GARLIC IMPORTED",
+            outcome: "COMPLETED"
+        }
+    };
+    writeCheckpoint(outputDirectory, {
+        version: 1,
+        marketDate: MARKET_DATE,
+        progress: staleProgress,
+        records: [restoredRecord]
+    });
+
+    const loaded = loadCheckpointWithProgress(
+        MARKET_DATE,
+        outputDirectory
+    );
+    const selection = selectResumeStartIndex(
+        ["APPLES", "WATERMELON"],
+        loaded,
+        getRecords(),
+        "0"
+    );
+    const runProgress = createRunCheckpointProgress(
+        selection.selectedIndex,
+        loaded.progress
+    );
+
+    expect(selection.selectedIndex).toBe(0);
+    expect(runProgress).toEqual({
+        nextProductIndex: 0,
+        activeProduct: null,
+        lastFinishedProduct: null
+    });
+    expect(getRecords()).toEqual([restoredRecord]);
+
+    saveRecord(createRecord({
+        scrapedAt: "2026-07-20T11:00:00.000Z"
+    }));
+    expect(getRecords()).toHaveLength(1);
+});
+
+test("failed true positional validation does not overwrite checkpoint", () => {
+    const outputDirectory = createOutputDirectory();
+    const progress: TshwaneCheckpointProgress = {
+        nextProductIndex: 2,
+        activeProduct: null,
+        lastFinishedProduct: {
+            index: 1,
+            name: "GARLIC IMPORTED",
+            outcome: "COMPLETED"
+        }
+    };
+    writeCheckpoint(outputDirectory, {
+        version: 1,
+        marketDate: MARKET_DATE,
+        progress,
+        records: [createRecord()]
+    });
+    const before = fs.readFileSync(
+        checkpointPath(outputDirectory),
+        "utf8"
+    );
+    const loaded = loadCheckpointWithProgress(
+        MARKET_DATE,
+        outputDirectory
+    );
+
+    expect(() => selectResumeStartIndex(
+        ["APPLES", "WATERMELON"],
+        loaded,
+        getRecords()
+    )).toThrow(
+        'Expected "GARLIC IMPORTED", found "WATERMELON".'
+    );
+    expect(fs.readFileSync(
+        checkpointPath(outputDirectory),
+        "utf8"
+    )).toBe(before);
 });
 
 test("rejects an envelope for the wrong market date", () => {

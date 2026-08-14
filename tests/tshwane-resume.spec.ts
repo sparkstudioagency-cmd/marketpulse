@@ -168,6 +168,64 @@ test("explicit START_PRODUCT_INDEX overrides every default", () => {
     }
 });
 
+test("explicit zero full replay ignores stale positional progress", () => {
+    const changedProducts = [
+        "APPLES",
+        "BANANAS",
+        "WATERMELON"
+    ];
+    const staleProgress: TshwaneCheckpointProgress = {
+        nextProductIndex: 3,
+        activeProduct: null,
+        lastFinishedProduct: {
+            index: 2,
+            name: "GARLIC IMPORTED",
+            outcome: "COMPLETED"
+        }
+    };
+
+    const selection = selectResumeStartIndex(
+        changedProducts,
+        checkpoint("v1", staleProgress, 1144),
+        [record("GARLIC IMPORTED")],
+        "0"
+    );
+
+    expect(selection).toEqual({
+        automaticIndex: 0,
+        selectedIndex: 0,
+        source: "explicit"
+    });
+
+    expect(createRunCheckpointProgress(
+        selection.selectedIndex,
+        staleProgress
+    )).toEqual({
+        nextProductIndex: 0,
+        activeProduct: null,
+        lastFinishedProduct: null
+    });
+});
+
+test("explicit zero full replay also starts at zero for an unchanged list", () => {
+    const progress: TshwaneCheckpointProgress = {
+        nextProductIndex: 2,
+        activeProduct: null,
+        lastFinishedProduct: {
+            index: 1,
+            name: "BANANAS",
+            outcome: "COMPLETED"
+        }
+    };
+
+    expect(selectResumeStartIndex(
+        products,
+        checkpoint("v1", progress),
+        [],
+        "0"
+    ).selectedIndex).toBe(0);
+});
+
 test("saved product name or index mismatch fails conservatively", () => {
     const mismatches: TshwaneCheckpointProgress[] = [
         {
@@ -202,6 +260,30 @@ test("saved product name or index mismatch fails conservatively", () => {
             )
         ).toThrow(/checkpoint/i);
     }
+});
+
+test("true positional mismatch identifies checkpoint and current names", () => {
+    const currentProducts = [
+        "APPLES",
+        "WATERMELON"
+    ];
+    const progress: TshwaneCheckpointProgress = {
+        nextProductIndex: 2,
+        activeProduct: null,
+        lastFinishedProduct: {
+            index: 1,
+            name: "GARLIC IMPORTED",
+            outcome: "COMPLETED"
+        }
+    };
+
+    expect(() => selectResumeStartIndex(
+        currentProducts,
+        checkpoint("v1", progress),
+        []
+    )).toThrow(
+        'Expected "GARLIC IMPORTED", found "WATERMELON".'
+    );
 });
 
 test("cursor equal to totalProducts produces an empty range", () => {
