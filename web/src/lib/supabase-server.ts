@@ -12,11 +12,16 @@ function requireEnvironmentVariable(name: string): string {
 
 export function createServerSupabaseClient() {
   const supabaseUrl = requireEnvironmentVariable("SUPABASE_URL");
-  const serviceRoleKey = requireEnvironmentVariable(
-    "SUPABASE_SERVICE_ROLE_KEY",
-  );
+  const publishableKey =
+    process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY;
 
-  return createClient(supabaseUrl, serviceRoleKey, {
+  if (!publishableKey) {
+    throw new Error(
+      "Missing required environment variable: SUPABASE_PUBLISHABLE_KEY.",
+    );
+  }
+
+  return createClient(supabaseUrl, publishableKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
