@@ -104,7 +104,7 @@ async function getLatestTshwaneContext(): Promise<LatestMarketContext> {
   const { data: ingestionRun, error: ingestionError } = await supabase
     .from("ingestion_runs")
     .select(
-      "scrape_date, status, records_found, records_imported, started_at, finished_at, error_message",
+      "scrape_date, status, records_found, records_imported, started_at, finished_at",
     )
     .eq("market_id", market.id)
     .order("scrape_date", { ascending: false })
@@ -128,7 +128,9 @@ async function getLatestTshwaneContext(): Promise<LatestMarketContext> {
     recordsImported: ingestionRun.records_imported ?? 0,
     startedAt: ingestionRun.started_at,
     finishedAt: ingestionRun.finished_at,
-    errorMessage: ingestionRun.error_message,
+    // Operational error details are intentionally not exposed through the
+    // dashboard's public read-only Supabase role.
+    errorMessage: null,
   };
 }
 
