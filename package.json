@@ -1,46 +1,27 @@
 {
-  "name": "marketpulse",
-  "version": "1.0.0",
-  "description": "MarketPulse is a platform that collects, standardizes and analyzes fresh produce market prices from South African fresh produce markets.",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
   "scripts": {
-    "typecheck": "tsc",
-    "scrape:tshwane": "tsx scrapers/markets/tshwane.ts",
-    "process:tshwane": "tsx scrapers/engine/processor.ts",
-    "import:tshwane": "tsx scrapers/engine/supabase-importer.ts",
-    "test": "playwright test",
-    "pipeline:tshwane": "tsx scrapers/engine/tshwane-pipeline.ts",
-    "pipeline:tshwane:commit": "tsx scrapers/engine/tshwane-pipeline.ts --commit",
-    "pipeline:tshwane:dry-run-existing": "tsx scrapers/engine/tshwane-pipeline.ts --skip-scrape",
-    "smoke:weather:live": "tsx scripts/weather-live-smoke.ts",
-    "verify:tshwane": "tsx scrapers/engine/verify-tshwane.ts"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/sparkstudioagency-cmd/marketpulse.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/sparkstudioagency-cmd/marketpulse/issues"
-  },
-  "homepage": "https://github.com/sparkstudioagency-cmd/marketpulse#readme",
-  "devDependencies": {
-    "@playwright/test": "^1.61.1",
-    "@types/node": "^26.1.1",
-    "supabase": "^2.109.1",
-    "tsx": "^4.23.1",
-    "typescript": "^7.0.2"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.110.8"
+    "@supabase/supabase-js": "^2.110.8",
+    "next": "16.2.11",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
   },
-  "allowScripts": {
-    "esbuild@0.28.1": true
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.11",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }
