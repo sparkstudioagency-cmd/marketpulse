@@ -16,7 +16,7 @@ try {
 
 type NullableNumber = number | null;
 
-interface CleanMarketRecord {
+export interface CleanMarketRecord {
   market: string;
   marketDate: string;
   product: string;
@@ -759,7 +759,7 @@ async function upsertCodeLookup(
   return result;
 }
 
-async function upsertMarketProducts(
+export async function upsertMarketProducts(
   supabase: SupabaseClient,
   records: CleanMarketRecord[],
   productIds:
@@ -931,6 +931,12 @@ async function upsertMarketProducts(
       .in(
         "product_id",
         requestedProductIds,
+      )
+      .order(
+        "id",
+        {
+          ascending: true,
+        },
       )
       .range(
         from,
@@ -1530,22 +1536,24 @@ async function main():
   );
 }
 
-main().catch(
-  (error: unknown) => {
-    const message =
-      error instanceof Error
-        ? error.stack ??
-          error.message
-        : String(error);
+if (require.main === module) {
+  void main().catch(
+    (error: unknown) => {
+      const message =
+        error instanceof Error
+          ? error.stack ??
+            error.message
+          : String(error);
 
-    console.error(
-      "\nSupabase import failed:",
-    );
+      console.error(
+        "\nSupabase import failed:",
+      );
 
-    console.error(
-      message,
-    );
+      console.error(
+        message,
+      );
 
-    process.exitCode = 1;
-  },
-);
+      process.exitCode = 1;
+    },
+  );
+}
