@@ -101,6 +101,9 @@ const MARKET_NAME_ALIASES: Record<string, string> = {
   "cape town": "Cape Town Fresh Produce Market",
   "cape town fresh produce market":
     "Cape Town Fresh Produce Market",
+  johannesburg: "Johannesburg Market",
+  "johannesburg market":
+    "Johannesburg Market",
 };
 
 function parseArguments(): ImportOptions {
@@ -547,7 +550,7 @@ function buildSummary(
   };
 }
 
-function createSupabaseAdminClient():
+export function createSupabaseAdminClient():
   SupabaseClient {
   const supabaseUrl =
     process.env.SUPABASE_URL;
@@ -619,23 +622,118 @@ async function getExistingMarket(
   );
 }
 
+export type ProductAnalyticsCategory =
+  | "fresh_produce"
+  | "non_produce"
+  | "source_artifact";
+
+export interface ImportPostDailyWriteContext {
+  marketId: number;
+  marketDate: string;
+  productIds: ReadonlyMap<string, number>;
+  marketProductIds: ReadonlyMap<string, number>;
+  marketProductIdsByRecordIndex: readonly number[];
+}
+
+export interface ImportRecordsOptions {
+  sourceRecordsFound?: number;
+
+  productAnalyticsCategories?: ReadonlyMap<
+    string,
+    ProductAnalyticsCategory
+  >;
+
+  afterDailyPricesUpsert?: (
+    context: ImportPostDailyWriteContext,
+  ) => Promise<void>;
+}
+
 async function upsertProducts(
   supabase: SupabaseClient,
   productNames: string[],
+  productAnalyticsCategories:
+    ReadonlyMap<
+      string,
+      ProductAnalyticsCategory
+    > = new Map(),
 ): Promise<Map<string, number>> {
+  const {
+    data: existingProductData,
+    error: existingProductError,
+  } =
+    await supabase
+      .from("products")
+      .select(
+        "name,analytics_category",
+      )
+      .in(
+        "name",
+        productNames,
+      );
+
+  if (
+    existingProductError
+  ) {
+    throw new Error(
+      `Failed to load existing product analytics categories: ${existingProductError.message}`,
+    );
+  }
+
+  const existingProductRows =
+    (existingProductData ?? []) as Array<{
+      name: string;
+      analytics_category:
+        ProductAnalyticsCategory | null;
+    }>;
+
+  const existingAnalyticsCategories =
+    new Map<
+      string,
+      ProductAnalyticsCategory
+    >();
+
+  for (
+    const row of
+    existingProductRows
+  ) {
+    if (
+      row.analytics_category !==
+      null
+    ) {
+      existingAnalyticsCategories.set(
+        row.name,
+        row.analytics_category,
+      );
+    }
+  }
+
   const productRows =
     productNames.map((name) => ({
       name,
       is_active: true,
+      analytics_category:
+        productAnalyticsCategories.get(
+          name,
+        ) ??
+        existingAnalyticsCategories.get(
+          name,
+        ) ??
+        "fresh_produce",
     }));
 
-  const { error: upsertError } =
+  const {
+    error: upsertError,
+  } =
     await supabase
       .from("products")
-      .upsert(productRows, {
-        onConflict: "name",
-        ignoreDuplicates: false,
-      });
+      .upsert(
+        productRows,
+        {
+          onConflict: "name",
+          ignoreDuplicates:
+            false,
+        },
+      );
 
   if (upsertError) {
     throw new Error(
@@ -1137,11 +1235,13 @@ async function failIngestionRun(
   }
 }
 
-async function importRecords(
+export async function importRecords(
   supabase: SupabaseClient,
   records: CleanMarketRecord[],
   finalStatus:
     "SUCCESS" | "PARTIAL",
+  options:
+    ImportRecordsOptions = {},
 ): Promise<void> {
   const sourceMarketName =
     normalizeText(
@@ -1153,6 +1253,23 @@ async function importRecords(
       records[0].marketDate,
     );
 
+  const sourceRecordsFound =
+    options.sourceRecordsFound ??
+    records.length;
+
+  if (
+    !Number.isInteger(
+      sourceRecordsFound,
+    ) ||
+    sourceRecordsFound <
+      records.length
+  ) {
+    throw new Error(
+      `sourceRecordsFound must be an integer greater than or equal to ` +
+        `the ${records.length} canonical records being imported.`,
+    );
+  }
+
   const marketId =
     await getExistingMarket(
       supabase,
@@ -1163,7 +1280,7 @@ async function importRecords(
     supabase,
     marketId,
     marketDate,
-    records.length,
+    sourceRecordsFound,
   );
 
   try {
@@ -1209,6 +1326,8 @@ async function importRecords(
       await upsertProducts(
         supabase,
         productNames,
+        options
+          .productAnalyticsCategories,
       );
 
     const containerIds =
@@ -1233,6 +1352,9 @@ async function importRecords(
         containerIds,
         gradeIds,
       );
+
+    const marketProductIdsByRecordIndex:
+      number[] = [];
 
     const dailyPriceRows =
       records.map(
@@ -1318,6 +1440,10 @@ async function importRecords(
                 `province="${province}".`,
             );
           }
+
+          marketProductIdsByRecordIndex.push(
+            marketProductId,
+          );
 
           return {
             market_id:
@@ -1412,6 +1538,20 @@ async function importRecords(
       throw new Error(
         `Failed to upsert daily prices: ${pricesError.message}`,
       );
+    }
+
+    if (
+      options
+        .afterDailyPricesUpsert
+    ) {
+      await options
+        .afterDailyPricesUpsert({
+          marketId,
+          marketDate,
+          productIds,
+          marketProductIds,
+          marketProductIdsByRecordIndex,
+        });
     }
 
     await completeIngestionRun(

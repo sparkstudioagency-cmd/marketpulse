@@ -1,0 +1,62 @@
+name: Johannesburg Market Collection
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: '20 13 * * *'
+      timezone: 'Africa/Johannesburg'
+
+    - cron: '50 14 * * *'
+      timezone: 'Africa/Johannesburg'
+
+    - cron: '20 17 * * *'
+      timezone: 'Africa/Johannesburg'
+
+    - cron: '20 19 * * *'
+      timezone: 'Africa/Johannesburg'
+
+concurrency:
+  group: johannesburg-market-collection
+  cancel-in-progress: false
+
+jobs:
+  collect-johannesburg:
+    name: Check Johannesburg Market
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check MarketPulse
+        run: npm run typecheck
+
+      - name: Run Johannesburg collection automation
+        run: npm run pipeline:johannesburg:auto:commit
+
+      - name: Upload Johannesburg diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: johannesburg-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            processed-output/johannesburg-*
+          if-no-files-found: ignore
+          retention-days: 30
