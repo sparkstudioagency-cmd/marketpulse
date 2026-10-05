@@ -1,36 +1,77 @@
 import process from "node:process";
-import { createClient } from "@supabase/supabase-js";
+
+import {
+  createClient,
+} from "@supabase/supabase-js";
 
 try {
   process.loadEnvFile();
-} catch (error) {
-  if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+}
+catch (
+  error
+) {
+  if (
+    (
+      error as
+        NodeJS.ErrnoException
+    ).code !==
+    "ENOENT"
+  ) {
     throw error;
   }
 }
 
-const marketDate = process.argv[2];
-const expectedDailyPriceRowsArg = process.argv[3];
-const expectedCorrectionRowsArg = process.argv[4];
+const MARKET_NAME =
+  "Tshwane Fresh Produce Market";
+
+const marketDate =
+  process.argv[2];
+
+const expectedDailyPriceRowsArg =
+  process.argv[3];
+
+const expectedCorrectionRowsArg =
+  process.argv[4];
 
 if (!marketDate) {
   console.error(
     "Usage: npm run verify:tshwane -- YYYY-MM-DD [expectedRows] [expectedCorrections]",
   );
-  process.exit(1);
+
+  process.exit(
+    1,
+  );
 }
 
 function parseOptionalExpectedCount(
-  value: string | undefined,
-  label: string,
-): number | undefined {
-  if (value === undefined) {
+  value:
+    string |
+    undefined,
+
+  label:
+    string,
+):
+  number |
+  undefined {
+  if (
+    value ===
+    undefined
+  ) {
     return undefined;
   }
 
-  const parsed = Number(value);
+  const parsed =
+    Number(
+      value,
+    );
 
-  if (!Number.isInteger(parsed) || parsed < 0) {
+  if (
+    !Number.isInteger(
+      parsed,
+    ) ||
+    parsed <
+      0
+  ) {
     throw new Error(
       `${label} must be a non-negative integer.`,
     );
@@ -51,9 +92,13 @@ const expectedCorrectionRows =
     "Expected correction rows",
   );
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl =
+  process.env
+    .SUPABASE_URL;
+
 const serviceRoleKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env
+    .SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl) {
   throw new Error(
@@ -67,66 +112,167 @@ if (!serviceRoleKey) {
   );
 }
 
-const supabase = createClient(
-  supabaseUrl,
-  serviceRoleKey,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
+const supabase =
+  createClient(
+    supabaseUrl,
+    serviceRoleKey,
+    {
+      auth: {
+        persistSession:
+          false,
+
+        autoRefreshToken:
+          false,
+      },
     },
-  },
-);
+  );
 
-async function countRows(
-  correctionOnly = false,
-): Promise<number> {
-  let query = supabase
-    .from("daily_prices")
-    .select("*", {
-      count: "exact",
-      head: true,
-    })
-    .eq("market_date", marketDate);
+async function resolveTshwaneMarketId():
+  Promise<number> {
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "markets",
+      )
+      .select(
+        "id,name",
+      )
+      .eq(
+        "name",
+        MARKET_NAME,
+      )
+      .maybeSingle();
 
-  if (correctionOnly) {
-    query = query.eq(
-      "is_correction",
-      true,
+  if (error) {
+    throw new Error(
+      `Unable to resolve ${MARKET_NAME}: ${error.message}`,
     );
   }
 
-  const { count, error } = await query;
+  if (!data) {
+    throw new Error(
+      `Market not found: ${MARKET_NAME}`,
+    );
+  }
+
+  const marketId =
+    Number(
+      data.id,
+    );
+
+  if (
+    !Number.isFinite(
+      marketId,
+    )
+  ) {
+    throw new Error(
+      `Invalid Tshwane market id: ${String(data.id)}`,
+    );
+  }
+
+  return marketId;
+}
+
+async function countRows(
+  marketId:
+    number,
+
+  correctionOnly =
+    false,
+):
+  Promise<number> {
+  let query =
+    supabase
+      .from(
+        "daily_prices",
+      )
+      .select(
+        "*",
+        {
+          count:
+            "exact",
+
+          head:
+            true,
+        },
+      )
+      .eq(
+        "market_id",
+        marketId,
+      )
+      .eq(
+        "market_date",
+        marketDate,
+      );
+
+  if (
+    correctionOnly
+  ) {
+    query =
+      query.eq(
+        "is_correction",
+        true,
+      );
+  }
+
+  const {
+    count,
+    error,
+  } =
+    await query;
 
   if (error) {
     throw error;
   }
 
-  return count ?? 0;
+  return (
+    count ??
+    0
+  );
 }
 
 function formatExpected(
-  value: number | undefined,
-): string {
-  return value === undefined
-    ? "not specified"
-    : String(value);
+  value:
+    number |
+    undefined,
+):
+  string {
+  return value ===
+    undefined
+      ? "not specified"
+      : String(
+          value,
+        );
 }
 
-async function run(): Promise<void> {
+async function run():
+  Promise<void> {
+  const marketId =
+    await resolveTshwaneMarketId();
+
   const dailyPriceRows =
-    await countRows();
+    await countRows(
+      marketId,
+    );
 
   const correctionRows =
-    await countRows(true);
+    await countRows(
+      marketId,
+      true,
+    );
 
   const rowCountMatches =
-    expectedDailyPriceRows === undefined ||
+    expectedDailyPriceRows ===
+      undefined ||
     dailyPriceRows ===
       expectedDailyPriceRows;
 
   const correctionCountMatches =
-    expectedCorrectionRows === undefined ||
+    expectedCorrectionRows ===
+      undefined ||
     correctionRows ===
       expectedCorrectionRows;
 
@@ -138,58 +284,82 @@ async function run(): Promise<void> {
   console.log(
     "================================",
   );
+
   console.log(
-    "MARKETPULSE DATABASE VERIFICATION",
+    "TSHWANE DATABASE VERIFICATION",
   );
+
   console.log(
     "================================",
   );
+
   console.log("");
+  console.log(
+    `Market:                  ${MARKET_NAME}`,
+  );
+
+  console.log(
+    `Market ID:               ${marketId}`,
+  );
+
   console.log(
     `Market date:             ${marketDate}`,
   );
+
   console.log("");
   console.log(
     `Expected daily rows:     ${formatExpected(
       expectedDailyPriceRows,
     )}`,
   );
+
   console.log(
-    `Actual daily rows:       ${dailyPriceRows}`,
+    `Actual Tshwane rows:     ${dailyPriceRows}`,
   );
+
   console.log("");
   console.log(
     `Expected corrections:    ${formatExpected(
       expectedCorrectionRows,
     )}`,
   );
+
   console.log(
     `Actual corrections:      ${correctionRows}`,
   );
+
   console.log("");
 
-  if (verified) {
+  if (
+    verified
+  ) {
     console.log(
       "STATUS: VERIFIED",
     );
-  } else {
+  }
+  else {
     console.error(
       "STATUS: FAILED",
     );
 
-    if (!rowCountMatches) {
+    if (
+      !rowCountMatches
+    ) {
       console.error(
-        `Daily price row mismatch: expected ${expectedDailyPriceRows}, received ${dailyPriceRows}.`,
+        `Tshwane daily-price mismatch: expected ${expectedDailyPriceRows}, received ${dailyPriceRows}.`,
       );
     }
 
-    if (!correctionCountMatches) {
+    if (
+      !correctionCountMatches
+    ) {
       console.error(
-        `Correction row mismatch: expected ${expectedCorrectionRows}, received ${correctionRows}.`,
+        `Tshwane correction mismatch: expected ${expectedCorrectionRows}, received ${correctionRows}.`,
       );
     }
 
-    process.exitCode = 1;
+    process.exitCode =
+      1;
   }
 
   console.log(
@@ -197,10 +367,16 @@ async function run(): Promise<void> {
   );
 }
 
-void run().catch((error) => {
-  console.error(
-    "Database verification failed:",
-    error,
-  );
-  process.exitCode = 1;
-});
+void run().catch(
+  (
+    error
+  ) => {
+    console.error(
+      "Tshwane database verification failed:",
+      error,
+    );
+
+    process.exitCode =
+      1;
+  },
+);
