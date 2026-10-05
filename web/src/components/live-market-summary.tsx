@@ -1,5 +1,8 @@
-﻿import type { MarketSummary } from "@/lib/market-data";
-import { getTshwaneMarketSummary } from "@/lib/market-data";
+import type { MarketSummary } from "@/lib/market-data";
+
+import {
+  getSelectedMarketSummary,
+} from "@/lib/selected-market-data";
 
 function getArchiveStatus(status: string): {
   value: string;
@@ -137,7 +140,8 @@ export async function LiveMarketSummary() {
   let summary: MarketSummary;
 
   try {
-    summary = await getTshwaneMarketSummary();
+    summary =
+      await getSelectedMarketSummary();
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown MarketPulse error";

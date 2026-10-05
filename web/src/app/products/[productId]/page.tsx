@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { MarketPulseShell } from "@/components/marketpulse-shell";
@@ -525,7 +525,7 @@ export default async function ProductPage({
             <div>
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <span className="rounded-md border border-[#dce7e2] bg-[#f3f8f6] px-2 py-1 text-[8px] font-bold uppercase tracking-[0.08em] text-[#176446]">
-                  Tshwane
+                  {product.marketName}
                 </span>
 
                 <span className="text-[9px] text-[#969ca2]">

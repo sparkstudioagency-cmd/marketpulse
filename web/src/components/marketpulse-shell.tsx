@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
@@ -246,7 +246,7 @@ function CollectionStatus() {
       </div>
 
       <p className="text-[11px] leading-5 text-[#69726d]">
-        Tshwane is checked automatically six times each day.
+        MarketPulse checks configured markets automatically throughout each market day.
       </p>
     </div>
   );

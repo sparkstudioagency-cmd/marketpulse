@@ -1,5 +1,8 @@
-﻿import type { CollectionHealth } from "@/lib/market-data";
-import { getTshwaneCollectionHealth } from "@/lib/market-data";
+import type { CollectionHealth } from "@/lib/market-data";
+
+import {
+  getSelectedMarketCollectionHealth,
+} from "@/lib/selected-market-data";
 
 function formatMarketDate(value: string): string {
   const date = new Date(`${value}T00:00:00Z`);
@@ -69,7 +72,8 @@ async function loadCollectionHealth(): Promise<
   | { ok: false; message: string }
 > {
   try {
-    const health = await getTshwaneCollectionHealth();
+    const health =
+      await getSelectedMarketCollectionHealth();
 
     return {
       ok: true,
@@ -107,7 +111,7 @@ function CollectionHealthView({ health }: { health: CollectionHealth }) {
             </p>
 
             <p className="mt-1 text-[11px] text-[#8a8f95]">
-              Automated Tshwane pipeline
+              {health.marketName} automated pipeline
             </p>
           </div>
 
@@ -178,7 +182,7 @@ function CollectionHealthError({ message }: { message: string }) {
         </p>
 
         <p className="mt-1 text-[11px] text-[#8a8f95]">
-          Automated Tshwane pipeline
+          Selected-market automated pipeline
         </p>
       </div>
 

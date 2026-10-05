@@ -1,7 +1,8 @@
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import {
+  getSelectedMarketDefinition,
+} from "@/lib/market-selection";
 
-const TSHWANE_MARKET_NAME =
-  "Tshwane Fresh Produce Market";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 const HISTORY_LIMIT = 30;
 const PAGE_SIZE = 1000;
@@ -9,6 +10,8 @@ const PAGE_SIZE = 1000;
 interface ProductRow {
   id: number;
   name: string;
+  analytics_category:
+    string | null;
 }
 
 interface MarketRow {
@@ -542,6 +545,9 @@ export async function getProductDetail(
     return null;
   }
 
+  const marketDefinition =
+    await getSelectedMarketDefinition();
+
   const supabase =
     createServerSupabaseClient();
 
@@ -551,7 +557,7 @@ export async function getProductDetail(
   ] = await Promise.all([
     supabase
       .from("products")
-      .select("id,name")
+      .select("id,name,analytics_category")
       .eq("id", productId)
       .maybeSingle(),
 
@@ -560,7 +566,7 @@ export async function getProductDetail(
       .select("id,name")
       .eq(
         "name",
-        TSHWANE_MARKET_NAME,
+        marketDefinition.databaseName,
       )
       .maybeSingle(),
   ]);
@@ -569,7 +575,11 @@ export async function getProductDetail(
     throw productResult.error;
   }
 
-  if (!productResult.data) {
+  if (
+    !productResult.data ||
+    productResult.data.analytics_category !==
+      "fresh_produce"
+  ) {
     return null;
   }
 
@@ -579,7 +589,7 @@ export async function getProductDetail(
 
   if (!marketResult.data) {
     throw new Error(
-      "Tshwane market was not found.",
+      `${marketDefinition.databaseName} was not found.`,
     );
   }
 
