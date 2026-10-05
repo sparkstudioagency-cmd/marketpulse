@@ -1,8 +1,11 @@
-﻿import {
-  getTshwaneSupplyWatch,
+import {
   type SupplySignal,
   type SupplySignalStatus,
 } from "@/lib/market-supply-watch";
+
+import {
+  getSelectedMarketSupplyWatch,
+} from "@/lib/selected-market-data";
 
 function formatDate(value: string): string {
   const date = new Date(`${value}T00:00:00Z`);
@@ -82,7 +85,7 @@ function SupplySignalRow({
 function SupplyWatchView({
   result,
 }: {
-  result: Awaited<ReturnType<typeof getTshwaneSupplyWatch>>;
+  result: Awaited<ReturnType<typeof getSelectedMarketSupplyWatch>>;
 }) {
   const coveragePercent =
     result.previousProductCount > 0
@@ -110,8 +113,26 @@ function SupplyWatchView({
             </div>
 
             <p className="mt-1 text-[11px] text-[#8a8f95]">
-              {formatDate(result.previousDate)} to{" "}
-              {formatDate(result.currentDate)}
+              {result.previousDate
+                ? (
+                    <>
+                      {formatDate(
+                        result.previousDate,
+                      )}{" "}
+                      to{" "}
+                      {formatDate(
+                        result.currentDate,
+                      )}
+                    </>
+                  )
+                : (
+                    <>
+                      {formatDate(
+                        result.currentDate,
+                      )}{" "}
+                      · awaiting comparison day
+                    </>
+                  )}
             </p>
           </div>
         </div>
@@ -135,7 +156,9 @@ function SupplyWatchView({
       <div className="mx-5 mb-5 mt-1 rounded-lg border border-[#e0e8e4] bg-[#f5faf8] p-4">
         <div className="flex items-center justify-between text-[10px] font-semibold">
           <span className="text-[#68716d]">
-            Product coverage vs previous day
+            {result.previousDate
+              ? "Product coverage vs previous day"
+              : "First archived market day"}
           </span>
 
           <span className="text-[#176f4e]">
@@ -178,7 +201,8 @@ async function loadSupplyWatch() {
   try {
     return {
       ok: true as const,
-      result: await getTshwaneSupplyWatch(),
+      result:
+        await getSelectedMarketSupplyWatch(),
     };
   } catch (error) {
     return {

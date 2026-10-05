@@ -1,5 +1,8 @@
-﻿import type { MarketMover } from "@/lib/market-data";
-import { getTshwaneMarketMovers } from "@/lib/market-data";
+import type { MarketMover } from "@/lib/market-data";
+
+import {
+  getSelectedMarketMovers,
+} from "@/lib/selected-market-data";
 
 function formatPrice(value: number): string {
   return new Intl.NumberFormat("en-ZA", {
@@ -170,7 +173,7 @@ function MoversTable({
 function MarketMoversView({
   result,
 }: {
-  result: Awaited<ReturnType<typeof getTshwaneMarketMovers>>;
+  result: Awaited<ReturnType<typeof getSelectedMarketMovers>>;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-[#e3e5e7] bg-white">
@@ -181,9 +184,33 @@ function MarketMoversView({
           </p>
 
           <p className="mt-1 text-[11px] text-[#8a8f95]">
-            Realized R/kg · {formatDate(result.previousDate)} to{" "}
-            {formatDate(result.currentDate)} · minimum{" "}
-            {formatMass(result.minimumMassKg)} kg traded on both days
+            {result.previousDate
+              ? (
+                  <>
+                    Realized R/kg ·{" "}
+                    {formatDate(
+                      result.previousDate,
+                    )}{" "}
+                    to{" "}
+                    {formatDate(
+                      result.currentDate,
+                    )}{" "}
+                    · minimum{" "}
+                    {formatMass(
+                      result.minimumMassKg,
+                    )}{" "}
+                    kg traded on both days
+                  </>
+                )
+              : (
+                  <>
+                    Realized R/kg ·{" "}
+                    {formatDate(
+                      result.currentDate,
+                    )}{" "}
+                    · comparison available after the next archived market day
+                  </>
+                )}
           </p>
         </div>
 
@@ -222,10 +249,11 @@ function MarketMoversError({ message }: { message: string }) {
 }
 
 export async function LiveMarketMovers() {
-  let result: Awaited<ReturnType<typeof getTshwaneMarketMovers>>;
+  let result: Awaited<ReturnType<typeof getSelectedMarketMovers>>;
 
   try {
-    result = await getTshwaneMarketMovers();
+    result =
+      await getSelectedMarketMovers();
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown MarketPulse error";
