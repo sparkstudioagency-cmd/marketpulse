@@ -591,17 +591,6 @@ function run(): void {
   const marketDate =
     resolveDate();
 
-  if (
-    commit &&
-    marketDate !==
-      "2026-10-03"
-  ) {
-    throw new Error(
-      "Controlled Johannesburg commit is currently restricted to market date 2026-10-03. " +
-        "Run without --commit for other dates.",
-    );
-  }
-
   const outputDirectory =
     path.join(
       process.cwd(),

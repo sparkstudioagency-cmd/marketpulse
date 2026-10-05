@@ -18,7 +18,9 @@
     "scrape:johannesburg": "tsx scrapers/markets/johannesburg.ts",
     "pipeline:johannesburg": "tsx scrapers/engine/johannesburg-pipeline.ts",
     "smoke:weather:live": "tsx scripts/weather-live-smoke.ts",
-    "verify:tshwane": "tsx scrapers/engine/verify-tshwane.ts"
+    "verify:tshwane": "tsx scrapers/engine/verify-tshwane.ts",
+    "pipeline:johannesburg:auto": "tsx scrapers/engine/johannesburg-automation.ts",
+    "pipeline:johannesburg:auto:commit": "tsx scrapers/engine/johannesburg-automation.ts --commit"
   },
   "repository": {
     "type": "git",
