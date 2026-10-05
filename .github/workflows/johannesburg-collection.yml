@@ -4,16 +4,16 @@ on:
   workflow_dispatch:
 
   schedule:
-    - cron: '20 13 * * *'
+    - cron: '23 13 * * *'
       timezone: 'Africa/Johannesburg'
 
-    - cron: '50 14 * * *'
+    - cron: '53 14 * * *'
       timezone: 'Africa/Johannesburg'
 
-    - cron: '20 17 * * *'
+    - cron: '23 17 * * *'
       timezone: 'Africa/Johannesburg'
 
-    - cron: '20 19 * * *'
+    - cron: '23 19 * * *'
       timezone: 'Africa/Johannesburg'
 
 concurrency:
