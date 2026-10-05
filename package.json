@@ -15,6 +15,8 @@
     "pipeline:tshwane": "tsx scrapers/engine/tshwane-pipeline.ts",
     "pipeline:tshwane:commit": "tsx scrapers/engine/tshwane-pipeline.ts --commit",
     "pipeline:tshwane:dry-run-existing": "tsx scrapers/engine/tshwane-pipeline.ts --skip-scrape",
+    "scrape:johannesburg": "tsx scrapers/markets/johannesburg.ts",
+    "pipeline:johannesburg": "tsx scrapers/engine/johannesburg-pipeline.ts",
     "smoke:weather:live": "tsx scripts/weather-live-smoke.ts",
     "verify:tshwane": "tsx scrapers/engine/verify-tshwane.ts"
   },
