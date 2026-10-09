@@ -1,82 +1,44 @@
-﻿name: Tshwane Market Collection
+name: Tshwane source archive (collection only)
 
 on:
   workflow_dispatch:
-
   schedule:
-    - cron: '7 7 * * *'
-      timezone: 'Africa/Johannesburg'
+    # UTC: 13:23 and 18:23 SAST. Publication dates always come from the source.
+    - cron: '23 11 * * *'
+    - cron: '23 16 * * *'
 
-    - cron: '37 9 * * *'
-      timezone: 'Africa/Johannesburg'
-
-    - cron: '11 12 * * *'
-      timezone: 'Africa/Johannesburg'
-
-    - cron: '41 14 * * *'
-      timezone: 'Africa/Johannesburg'
-
-    - cron: '13 17 * * *'
-      timezone: 'Africa/Johannesburg'
-
-    - cron: '43 19 * * *'
-      timezone: 'Africa/Johannesburg'
+permissions:
+  contents: read
 
 concurrency:
   group: tshwane-market-collection
   cancel-in-progress: false
 
 jobs:
-  collect-tshwane:
-    name: Check Tshwane Market
+  archive-source:
+    name: Collect, validate and archive; database import disabled
     runs-on: ubuntu-latest
-
-    permissions:
-      actions: read
-      contents: read
-
-    env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-
+    timeout-minutes: 180
     steps:
-      - name: Checkout repository
+      - name: Checkout reviewed collection release
         uses: actions/checkout@v4
-
-      - name: Restore newest Tshwane checkpoint
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash scripts/restore-tshwane-checkpoint.sh
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-
-      - name: Install dependencies
+      - name: Install locked dependencies
         run: npm ci
-
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-
-      - name: Type-check MarketPulse
-        run: npm run typecheck
-
-      - name: Run Tshwane collection pipeline
-        run: npm run pipeline:tshwane:commit
-
-      - name: Upload Tshwane recovery files
+      - name: Preserve the current public source publication
+        run: npx tsx scripts/collect-tshwane-only.ts --collect-public --timeout-ms=9000000 --output-root=scraper-diagnostics/collection-only
+      - name: Upload source evidence even if validation fails
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: tshwane-recovery-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            scraper-diagnostics/
-            scraper-output/tshwane-checkpoint-*.json
-            scraper-output/tshwane-run-status-*.json
-            scraper-output/tshwane-publication-date.json
-            scraper-output/tshwane-market-records-*.json
-            processed-output/
-          if-no-files-found: ignore
-          retention-days: 30
+          name: tshwane-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: scraper-diagnostics/collection-only/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 90
