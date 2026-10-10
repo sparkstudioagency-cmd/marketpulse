@@ -19,8 +19,49 @@ export async function collectJohannesburg(args: string[]) {
     for(let attempt=0;attempt<2;attempt++) {
       if(Date.now()-started>timeout)throw new Error('COLLECTION_DEADLINE_EXCEEDED');
       await delay(1000);
-      const r=await fetch(url,{redirect:'error',signal:AbortSignal.timeout(Math.min(30000,Math.max(1,timeout-(Date.now()-started)))),headers:{'User-Agent':'MarketPulse collection-only evidence preservation'}});
-      const bytes=Buffer.from(await r.arrayBuffer());
+      let r: Response;
+      let bytes: Buffer;
+
+      try {
+        r = await fetch(url, {
+          redirect: 'error',
+          signal: AbortSignal.timeout(
+            Math.min(30000, Math.max(1, timeout - (Date.now() - started)))
+          ),
+          headers: {
+            'User-Agent': 'MarketPulse collection-only evidence preservation'
+          }
+        });
+
+        bytes = Buffer.from(await r.arrayBuffer());
+      } catch (error) {
+        const message = error instanceof Error
+          ? error.message
+          : 'UNKNOWN_TRANSPORT_ERROR';
+
+        requests.push({
+          url,
+          attempt,
+          status: 'TRANSPORT_ERROR',
+          capturedAt: new Date().toISOString(),
+          error: message
+        });
+
+        if (attempt === 1) {
+          throw new Error(
+            `SOURCE_TRANSPORT_RETRIES_EXHAUSTED: ${url}: ${message}`
+          );
+        }
+
+        const remaining = timeout - (Date.now() - started);
+
+        if (remaining <= 3000) {
+          throw new Error('COLLECTION_DEADLINE_EXCEEDED');
+        }
+
+        await delay(3000);
+        continue;
+      }
       if(bytes.length>8*1024*1024)throw new Error('SOURCE_RESPONSE_TOO_LARGE');
       requests.push({url,attempt,status:r.status,capturedAt:new Date().toISOString(),bytes:bytes.length,sha256:sha256(bytes)});
       if(r.ok){capture.write('raw/'+name,bytes);return bytes.toString('utf8');}
@@ -32,11 +73,55 @@ export async function collectJohannesburg(args: string[]) {
   }
   try {
     const start=await get('index-start.html',SOURCE);date=publicationDate(start);
-    const cats=catalogue(start),summary=summaries(start,cats);const aggregate: Record<string,unknown>[]=[];
+    const cats = catalogue(start);
+
+    const nameCounts = new Map<string, number>();
+    for (const commodity of cats) {
+      nameCounts.set(
+        commodity.sourceProductName,
+        (nameCounts.get(commodity.sourceProductName) ?? 0) + 1
+      );
+    }
+
+    const ambiguous = cats.filter(
+      commodity => (nameCounts.get(commodity.sourceProductName) ?? 0) > 1
+    );
+
+    const preloadedAggregates = new Map<
+      string,
+      ReturnType<typeof containers>
+    >();
+
+    for (const commodity of ambiguous) {
+      const html = await get(
+        'commodity-' + commodity.sourceProductId + '-aggregate.html',
+        SOURCE + '?commodity=' + commodity.sourceProductId + '&containerall=1'
+      );
+
+      if (publicationDate(html) !== date) {
+        throw new Error('PUBLICATION_CHANGED');
+      }
+
+      preloadedAggregates.set(
+        commodity.sourceProductId,
+        containers(html)
+      );
+    }
+
+    const summary = summaries(start, cats, preloadedAggregates);
+    const aggregate: Record<string,unknown>[]=[];
     const reconciliation: Record<string,unknown>[]=[];
     for(const [i,c]of cats.entries()) {
       const detailed=await get('commodity-'+c.sourceProductId+'-detailed.html',SOURCE+'?commodity='+c.sourceProductId+'&containerall=2');
-      const agg=await get('commodity-'+c.sourceProductId+'-aggregate.html',SOURCE+'?commodity='+c.sourceProductId+'&containerall=1');
+      const agg = preloadedAggregates.has(c.sourceProductId)
+        ? fs.readFileSync(
+            path.join(capture.directory, 'raw', 'commodity-' + c.sourceProductId + '-aggregate.html'),
+            'utf8'
+          )
+        : await get(
+            'commodity-' + c.sourceProductId + '-aggregate.html',
+            SOURCE + '?commodity=' + c.sourceProductId + '&containerall=1'
+          );
       if(publicationDate(agg)!==date)throw new Error('PUBLICATION_CHANGED');
       const dr=details(detailed,c,date),ar=containers(agg);rows.push(...dr);
       aggregate.push(...ar.map(r=>({...c,marketDate:date,...r})));
@@ -54,9 +139,9 @@ export async function collectJohannesburg(args: string[]) {
       if(i%10===0)console.log('Johannesburg: '+(i+1)+'/'+cats.length+' commodities archived; publication '+date);
     }
     const end=await get('index-end.html',SOURCE);
-    if(publicationDate(end)!==date||canonical(catalogue(end))!==canonical(cats)||canonical(summaries(end,cats))!==canonical(summary))throw new Error('PUBLICATION_CHANGED_DURING_CAPTURE');
+    if(publicationDate(end)!==date||canonical(catalogue(end))!==canonical(cats)||canonical(summaries(end,cats,preloadedAggregates))!==canonical(summary))throw new Error('PUBLICATION_CHANGED_DURING_CAPTURE');
     const sourceDuplicates=duplicates(rows);
-    const canonicalIdentities=rows.map(r=>canonical([r.sourceProductName,r.container,r.unitMass,r.variety,r.class,r.size,r.count,r.colour,'UNSPECIFIED',null]));
+    const canonicalIdentities=rows.map(r=>canonical([r.sourceProductId,r.sourceProductName,r.container,r.unitMass,r.variety,r.class,r.size,r.count,r.colour,'UNSPECIFIED',null]));
     if(sourceDuplicates.length||new Set(canonicalIdentities).size!==rows.length||!rows.length)throw new Error('IDENTITY_COLLISION_OR_EMPTY_SNAPSHOT');
     capture.writeJson('catalogue.json',cats);capture.writeJson('summary.json',summary);capture.writeJson('detailed.json',rows);capture.writeJson('aggregate.json',aggregate);capture.writeJson('reconciliation.json',reconciliation);
     const normalized=rows.map((r,index)=>({...r,sourceRowIndex:rows.slice(0,index).filter(p=>p.sourceProductId===r.sourceProductId).length,rawPositions:r.rawProductCombination.split(',').map(s=>s.trim()),detailedHtmlSha256:sha256(fs.readFileSync(path.join(capture.directory,'raw','commodity-'+r.sourceProductId+'-detailed.html')))}));
