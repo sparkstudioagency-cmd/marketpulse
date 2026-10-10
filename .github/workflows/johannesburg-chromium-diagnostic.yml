@@ -1,0 +1,40 @@
+name: Johannesburg Chromium connectivity diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chromium-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Chromium source diagnostic
+        run: node scripts/diagnose-johannesburg-chromium.cjs
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: johannesburg-chromium-diagnostic
+          path: scraper-diagnostics/chromium-johannesburg/
+          if-no-files-found: warn
+          retention-days: 30
