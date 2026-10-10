@@ -45,7 +45,7 @@ export function catalogue(html: string): Commodity[] {
   const select = html.match(/<select\b[^>]*name=["']commodity["'][^>]*>([\s\S]*?)<\/select>/i);
   if (!select) throw new Error('Missing commodity select');
   const rows = [...select[1].matchAll(/<option\b[^>]*value=["'](\d+)["'][^>]*>([\s\S]*?)<\/option>/gi)].map(m => ({ sourceProductId: m[1], sourceProductName: text(m[2]) }));
-  if (!rows.length || rows.some(r => !r.sourceProductName) || new Set(rows.map(r => r.sourceProductId)).size !== rows.length || new Set(rows.map(r => r.sourceProductName)).size !== rows.length) throw new Error('Empty or duplicate catalogue');
+  if (!rows.length || rows.some(r => !r.sourceProductName) || new Set(rows.map(r => r.sourceProductId)).size !== rows.length) throw new Error('Empty or duplicate catalogue');
   return rows.sort((a,b) => Number(a.sourceProductId)-Number(b.sourceProductId));
 }
 export function tableRows(html: string, headers: string[]): string[][] {
@@ -63,15 +63,88 @@ function period(raw: string): { daily: number; mtd: number } {
   if (!m) throw new Error(`Expected daily / MTD: ${raw}`);
   return { daily: numeric(m[1]), mtd: numeric(m[2]) };
 }
-export function summaries(html: string, commodities: Commodity[]): Summary[] {
-  const byName = new Map(commodities.map(c => [c.sourceProductName,c]));
-  const rows = tableRows(html, SUMMARY_HEADERS).map(c => {
-    const commodity = byName.get(c[0]); if (!commodity) throw new Error(`Unknown summary commodity: ${c[0]}`);
-    const sales=period(c[1]), qty=period(c[2]), mass=period(c[3]);
-    return { ...commodity, totalSales:sales.daily, soldQuantity:qty.daily, totalMass:mass.daily, quantityAvailable:numeric(c[4]), mtd:{ totalSales:sales.mtd, soldQuantity:qty.mtd, totalMass:mass.mtd } };
+export function summaries(
+  html: string,
+  commodities: Commodity[],
+  aggregates: Map<string, ContainerRow[]> = new Map()
+): Summary[] {
+  const sourceRows = tableRows(html, SUMMARY_HEADERS);
+  const assigned = new Set<string>();
+
+  const rows = sourceRows.map(c => {
+    const candidates = commodities.filter(
+      commodity => commodity.sourceProductName === c[0]
+    );
+
+    if (!candidates.length) {
+      throw new Error(`Unknown summary commodity: ${c[0]}`);
+    }
+
+    const sales = period(c[1]);
+    const qty = period(c[2]);
+    const mass = period(c[3]);
+    const inventory = numeric(c[4]);
+
+    let matches = candidates.filter(
+      commodity => !assigned.has(commodity.sourceProductId)
+    );
+
+    if (candidates.length > 1) {
+      matches = matches.filter(commodity => {
+        const aggregate = aggregates.get(commodity.sourceProductId);
+        if (!aggregate) return false;
+
+        const daily = totals(aggregate);
+        const available = aggregate.reduce(
+          (sum, row) => sum + Math.round(row.quantityAvailable * 100),
+          0
+        ) / 100;
+
+        return (
+          daily.totalSales === sales.daily &&
+          daily.soldQuantity === qty.daily &&
+          (
+            daily.totalMass === mass.daily ||
+            Math.round(daily.totalMass) === mass.daily
+          ) &&
+          available === inventory
+        );
+      });
+    }
+
+    if (matches.length !== 1) {
+      throw new Error(
+        `AMBIGUOUS_SUMMARY_COMMODITY: ${c[0]} matched ${matches.length} source IDs`
+      );
+    }
+
+    const commodity = matches[0];
+    assigned.add(commodity.sourceProductId);
+
+    return {
+      ...commodity,
+      totalSales: sales.daily,
+      soldQuantity: qty.daily,
+      totalMass: mass.daily,
+      quantityAvailable: inventory,
+      mtd: {
+        totalSales: sales.mtd,
+        soldQuantity: qty.mtd,
+        totalMass: mass.mtd
+      }
+    };
   });
-  if (rows.length !== commodities.length || new Set(rows.map(r => r.sourceProductId)).size !== rows.length) throw new Error('Missing/duplicate summary rows');
-  return rows.sort((a,b) => Number(a.sourceProductId)-Number(b.sourceProductId));
+
+  if (
+    rows.length !== commodities.length ||
+    assigned.size !== commodities.length
+  ) {
+    throw new Error('Missing/duplicate summary rows');
+  }
+
+  return rows.sort(
+    (a, b) => Number(a.sourceProductId) - Number(b.sourceProductId)
+  );
 }
 export function containers(html: string): ContainerRow[] {
   return tableRows(html, CONTAINER_HEADERS).map(c => { const sales=period(c[2]), qty=period(c[3]), mass=period(c[4]); return { container:c[0], quantityAvailable:numeric(c[1]), totalSales:sales.daily, soldQuantity:qty.daily, totalMass:mass.daily, mtd:{totalSales:sales.mtd,soldQuantity:qty.mtd,totalMass:mass.mtd},randPerKg:numeric(c[5]),rawCells:c }; });
