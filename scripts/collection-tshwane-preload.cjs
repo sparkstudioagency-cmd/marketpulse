@@ -21,7 +21,7 @@ chromium.launch=async options=>{
    if(response.request().resourceType()!=='document'||new URL(response.url()).hostname!=='tfpm.tshwane.gov.za')return;
    const index=++count;
    pending.push((async()=>{
-    const body=await response.body();if(body.length>8*1024*1024)throw Error('SOURCE_RESPONSE_TOO_LARGE');
+    await response.finished();const body=await response.body();if(body.length>8*1024*1024)throw Error('SOURCE_RESPONSE_TOO_LARGE');
     const name='document-'+String(index).padStart(6,'0')+'.html';const raw=path.join(directory,'raw');fs.mkdirSync(raw,{recursive:true});fs.writeFileSync(path.join(raw,name),body,{flag:'wx'});
     fs.appendFileSync(path.join(raw,'responses.jsonl'),JSON.stringify({file:name,url:response.url(),method:response.request().method(),status:response.status(),capturedAt:new Date().toISOString(),postDataSha256:response.request().postData()?require('node:crypto').createHash('sha256').update(response.request().postData()).digest('hex'):null})+'\n');
    })().catch(e=>{fs.appendFileSync(path.join(directory,'raw-capture-errors.log'),String(e.message)+'\n');}));
