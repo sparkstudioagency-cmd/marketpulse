@@ -2111,13 +2111,30 @@ async function run(): Promise<void> {
                         attempt <
                         MAXIMUM_PACKAGE_ATTEMPTS
                     ) {
+                        // A denied package response requires fresh source navigation.
+                        const deniedPackageResponse =
+                            await page
+                                .locator("body")
+                                .innerText()
+                                .then(text =>
+                                    /denied your request/i.test(text)
+                                )
+                                .catch(() => false);
+
                         const returnedPackageCount =
-                            await safelyReturnToProduct(
-                                page,
-                                productIndex,
-                                productName,
-                                totalProducts
-                            );
+                            deniedPackageResponse
+                                ? await restoreProductPage(
+                                    page,
+                                    productIndex,
+                                    productName,
+                                    totalProducts
+                                )
+                                : await safelyReturnToProduct(
+                                    page,
+                                    productIndex,
+                                    productName,
+                                    totalProducts
+                                );
 
                         if (
                             returnedPackageCount ===
