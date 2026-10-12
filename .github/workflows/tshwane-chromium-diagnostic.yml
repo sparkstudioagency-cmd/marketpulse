@@ -1,0 +1,41 @@
+name: Tshwane Chromium Targeted Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Test three Tshwane products with Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Diagnose Tshwane product pages
+        run: npx tsx scripts/diagnose-tshwane-products.ts
+
+      - name: Upload Chromium diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tshwane-chromium-diagnostic
+          path: scraper-diagnostics/tshwane-targeted/
+          if-no-files-found: warn
+          retention-days: 30
