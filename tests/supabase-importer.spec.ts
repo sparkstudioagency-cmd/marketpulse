@@ -13,6 +13,10 @@ interface MarketProductInput {
   mass: number | null;
   unit: string | null;
   province: string;
+  variety_id: number | null;
+  size_id: number | null;
+  source_count: number | null;
+  colour_id: number | null;
 }
 
 interface StoredMarketProduct extends MarketProductInput {
@@ -112,6 +116,12 @@ class FakeMarketProductClient {
   } | null = null;
   private rows: StoredMarketProduct[] = [];
 
+  constructor(
+    private readonly additionalRows:
+      (rows: readonly StoredMarketProduct[]) => StoredMarketProduct[] =
+      () => [],
+  ) {}
+
   from(table: string) {
     expect(table).toBe("market_products");
     return {
@@ -120,15 +130,19 @@ class FakeMarketProductClient {
         options: { onConflict: string; ignoreDuplicates: boolean },
       ) => {
         this.upsertOptions = { ...options };
-        this.rows = rows.map((row, index) => ({
+        const insertedRows = rows.map((row, index) => ({
           id: index + 1,
           ...row,
         }));
+        this.rows = [
+          ...insertedRows,
+          ...this.additionalRows(insertedRows),
+        ];
         return { error: null };
       },
       select: (columns: string) => {
         expect(columns).toBe(
-          "id,product_id,container_id,grade_id,mass,unit,province",
+          "id,product_id,container_id,grade_id,mass,unit,province,variety_id,size_id,source_count,colour_id",
         );
         return new MarketProductSelectQuery(this.rows, this.pageCalls);
       },
@@ -167,7 +181,53 @@ test("resolves every requested market-product key across stable pages over 1000 
     { from: 1000, to: 1999, orderColumn: "id", ascending: true },
   ]);
   expect(client.upsertOptions).toEqual({
-    onConflict: "product_id,container_id,grade_id,mass,unit,province",
+    onConflict: "product_id,container_id,grade_id,mass,unit,province,variety_id,size_id,source_count,colour_id",
     ignoreDuplicates: false,
   });
+});
+
+test("rejects non-NULL market-product variants when resolving legacy keys", async () => {
+  const record: CleanMarketRecord = {
+    market: "Tshwane",
+    marketDate: "2026-10-15",
+    product: "Test Basil",
+    province: "Gauteng",
+  };
+
+  const variantFields = [
+    "variety_id",
+    "size_id",
+    "source_count",
+    "colour_id",
+  ] as const;
+
+  const client = new FakeMarketProductClient((rows) => {
+    const legacy = rows[0];
+
+    expect(legacy).toBeDefined();
+
+    for (const field of variantFields) {
+      expect(legacy[field]).toBeNull();
+    }
+
+    return variantFields.map((field, index) => ({
+      ...legacy,
+      id: 9001 + index,
+      [field]: index + 1,
+    }));
+  });
+
+  const resolved = await upsertMarketProducts(
+    client as unknown as SupabaseClient,
+    [record],
+    new Map([["Test Basil", 10]]),
+    new Map([["UNSPECIFIED", 20]]),
+    new Map([["UNSPECIFIED", 30]]),
+  );
+
+  expect(resolved.size).toBe(1);
+  expect([...resolved.values()]).toEqual([1]);
+  expect(client.pageCalls).toEqual([
+    { from: 0, to: 999, orderColumn: "id", ascending: true },
+  ]);
 });

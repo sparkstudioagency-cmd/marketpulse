@@ -1,0 +1,150 @@
+{
+    "version":  1,
+    "project":  "nkrwgbxbfusesxbnwalo",
+    "marketId":  3,
+    "sourcePublicationDate":  "2026-11-06",
+    "sourceCatalogueSha256":  "7364fc81fb7602fc2cc1e8a432278953bc8365f2e43113b2dd693292f3c167fe",
+    "canonicalProductsSnapshotSha256":  "1447d60fe2eeee1d6b4ed57e7ac0ff9f8307e027d9187c765d3db7ea7f43b247",
+    "decisionEvidence":  "docs/release-review/Johannesburg-mapping-decisions.md",
+    "rows":  [
+                 {
+                     "sourceProductId":  "100",
+                     "sourceProductName":  "HONEY",
+                     "productId":  28054,
+                     "productName":  "HONEY",
+                     "category":  "non_produce",
+                     "allowCanonicalAggregation":  false
+                 },
+                 {
+                     "sourceProductId":  "102",
+                     "sourceProductName":  "PEACHES",
+                     "productId":  27935,
+                     "productName":  "Peaches",
+                     "category":  "fresh_produce",
+                     "allowCanonicalAggregation":  false
+                 },
+                 {
+                     "sourceProductId":  "104",
+                     "sourceProductName":  "PANTRA LEAVES",
+                     "productId":  1204,
+                     "productName":  "Pantra Leaves",
+                     "category":  "fresh_produce",
+                     "allowCanonicalAggregation":  false
+                 },
+                 {
+                     "sourceProductId":  "128",
+                     "sourceProductName":  "BRUSSELS SPROUTS",
+                     "productId":  158,
+                     "productName":  "Brussel Sprouts",
+                     "category":  "fresh_produce",
+                     "allowCanonicalAggregation":  false
+                 },
+                 {
+                     "sourceProductId":  "195",
+                     "sourceProductName":  "POTJIEKOS",
+                     "productId":  31613,
+                     "productName":  "Potjiekos",
+                     "category":  "fresh_produce",
+                     "allowCanonicalAggregation":  false
+                 },
+                 {
+                     "sourceProductId":  "270",
+                     "sourceProductName":  "CUSTARD APPLES",
+                     "productId":  404,
+                     "productName":  "CUSTARD APPLES",
+                     "category":  "fresh_produce",
+                     "allowCanonicalAggregation":  false
+                 },
+                 {
+                     "sourceProductId":  "42",
+                     "sourceProductName":  "LITCHIS",
+                     "productId":  31642,
+                     "productName":  "LITCHIS",
+                     "category":  "fresh_produce"
+                 },
+                 {
+                     "sourceProductId":  "106",
+                     "sourceProductName":  "SHU-SHU",
+                     "productId":  31643,
+                     "productName":  "SHU-SHU",
+                     "category":  "fresh_produce"
+                 },
+                 {
+                     "sourceProductId":  "160",
+                     "sourceProductName":  "JACK BE LITTLE",
+                     "productId":  31644,
+                     "productName":  "JACK BE LITTLE",
+                     "category":  "fresh_produce"
+                 },
+                 {
+                     "sourceProductId":  "171",
+                     "sourceProductName":  "MIXED",
+                     "productId":  31645,
+                     "productName":  "MIXED",
+                     "category":  "fresh_produce"
+                 },
+                 {
+                     "sourceProductId":  "223",
+                     "sourceProductName":  "GOOVAAR",
+                     "productId":  31646,
+                     "productName":  "GOOVAAR",
+                     "category":  "fresh_produce"
+                 },
+                 {
+                     "sourceProductId":  "245",
+                     "sourceProductName":  "TURIA",
+                     "productId":  31647,
+                     "productName":  "TURIA",
+                     "category":  "fresh_produce"
+                 },
+                 {
+                     "sourceProductId":  "247",
+                     "sourceProductName":  "DRUM STICK",
+                     "productId":  31648,
+                     "productName":  "DRUM STICK",
+                     "category":  "fresh_produce"
+                 },
+                 {
+                     "sourceProductId":  "271",
+                     "sourceProductName":  "APRICOTS",
+                     "productId":  31649,
+                     "productName":  "APRICOTS",
+                     "category":  "fresh_produce"
+                 },
+                 {
+                     "sourceProductId":  "287",
+                     "sourceProductName":  "LETTUCE RADICIO",
+                     "productId":  31650,
+                     "productName":  "LETTUCE RADICIO",
+                     "category":  "fresh_produce"
+                 },
+                 {
+                     "sourceProductId":  "312",
+                     "sourceProductName":  "EDIBLE FLOWERS",
+                     "productId":  31651,
+                     "productName":  "EDIBLE FLOWERS",
+                     "category":  "fresh_produce"
+                 },
+                 {
+                     "sourceProductId":  "362",
+                     "sourceProductName":  "MACADAMIA (SHELL)",
+                     "productId":  31652,
+                     "productName":  "MACADAMIA (SHELL)",
+                     "category":  "fresh_produce"
+                 },
+                 {
+                     "sourceProductId":  "387",
+                     "sourceProductName":  "HABISCUS",
+                     "productId":  31653,
+                     "productName":  "HABISCUS",
+                     "category":  "fresh_produce"
+                 },
+                 {
+                     "sourceProductId":  "924",
+                     "sourceProductName":  "JAM",
+                     "productId":  31654,
+                     "productName":  "JAM",
+                     "category":  "non_produce"
+                 }
+             ]
+}

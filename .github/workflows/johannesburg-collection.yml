@@ -1,4 +1,4 @@
-name: Johannesburg source archive (collection only)
+name: Johannesburg collection and guarded import
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   archive-source:
-    name: Collect, validate and archive; database import disabled
+    name: Collect, validate, archive and guarded import
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -29,14 +29,30 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      - name: Test archive import guards
+        run: npx playwright test tests/archive-import-bridge.spec.ts tests/johannesburg-reviewed-mappings.spec.ts tests/supabase-importer.spec.ts --project=chromium --reporter=line
       - name: Preserve the current public source publication
         run: npx tsx scripts/collect-johannesburg-only.ts --collect-public --timeout-ms=1800000 --output-root=scraper-diagnostics/collection-only
+      - name: Prepare Johannesburg canonical mapping (read only)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/johannesburg-archive-import.ts
+      - name: Import reviewed Johannesburg mapping
+        if: ${{ vars.MARKETPULSE_ENABLE_JOHANNESBURG_IMPORT == 'true' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MARKETPULSE_ENABLE_JOHANNESBURG_IMPORT: 'true'
+        run: npx tsx scripts/johannesburg-archive-import.ts --commit
       - name: Upload source evidence even if validation fails
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: johannesburg-source-${{ github.run_id }}-${{ github.run_attempt }}
-          path: scraper-diagnostics/collection-only/
+          path: |
+            scraper-diagnostics/collection-only/
+            scraper-diagnostics/import-plans/
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 90

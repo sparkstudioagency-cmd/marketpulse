@@ -1,4 +1,4 @@
-name: Tshwane source archive (collection only)
+name: Tshwane collection and guarded import
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   archive-source:
-    name: Collect, validate and archive; database import disabled
+    name: Collect, validate, archive and import accepted publication
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -31,8 +31,22 @@ jobs:
         run: npm ci
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      - name: Test archive import guards
+        run: npx playwright test tests/archive-import-bridge.spec.ts tests/johannesburg-reviewed-mappings.spec.ts tests/supabase-importer.spec.ts --project=chromium --reporter=line
       - name: Preserve the current public source publication
         run: npx tsx scripts/collect-tshwane-only.ts --collect-public --timeout-ms=9000000 --output-root=scraper-diagnostics/collection-only
+      - name: Validate Tshwane import bridge (dry run)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx tsx scripts/tshwane-archive-import.ts
+      - name: Import accepted Tshwane publication into production
+        if: ${{ vars.MARKETPULSE_ENABLE_TSHWANE_IMPORT == 'true' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MARKETPULSE_ENABLE_TSHWANE_IMPORT: 'true'
+        run: npx tsx scripts/tshwane-archive-import.ts --commit
       - name: Upload source evidence even if validation fails
         if: ${{ always() }}
         uses: actions/upload-artifact@v4

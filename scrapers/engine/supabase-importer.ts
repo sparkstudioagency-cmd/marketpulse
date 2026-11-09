@@ -68,6 +68,10 @@ interface MarketProductRow extends LookupRow {
   mass: number | null;
   unit: string | null;
   province: string;
+  variety_id: number | null;
+  size_id: number | null;
+  source_count: number | null;
+  colour_id: number | null;
 }
 
 interface ImportSummary {
@@ -636,6 +640,9 @@ export interface ImportPostDailyWriteContext {
 }
 
 export interface ImportRecordsOptions {
+  /** Strict archive bridges may only reuse these verified, existing products. */
+  existingProductIds?: ReadonlyMap<string, number>;
+
   sourceRecordsFound?: number;
 
   productAnalyticsCategories?: ReadonlyMap<
@@ -956,6 +963,10 @@ export async function upsertMarketProducts(
         mass,
         unit,
         province,
+        variety_id: null,
+        size_id: null,
+        source_count: null,
+        colour_id: null,
       },
     );
   }
@@ -983,7 +994,7 @@ export async function upsertMarketProducts(
       )
       .upsert(rows, {
         onConflict:
-          "product_id,container_id,grade_id,mass,unit,province",
+          "product_id,container_id,grade_id,mass,unit,province,variety_id,size_id,source_count,colour_id",
         ignoreDuplicates: false,
       });
 
@@ -1024,7 +1035,7 @@ export async function upsertMarketProducts(
         "market_products",
       )
       .select(
-        "id,product_id,container_id,grade_id,mass,unit,province",
+        "id,product_id,container_id,grade_id,mass,unit,province,variety_id,size_id,source_count,colour_id",
       )
       .in(
         "product_id",
@@ -1072,6 +1083,17 @@ export async function upsertMarketProducts(
   for (
     const row of loadedRows
   ) {
+    // The historical importer only supports the legacy NULL variant.
+    // Never resolve a six-column key to a different product variant.
+    if (
+      row.variety_id != null ||
+      row.size_id != null ||
+      row.source_count != null ||
+      row.colour_id != null
+    ) {
+      continue;
+    }
+
     const key =
       makeMarketProductKey(
         Number(
@@ -1235,6 +1257,25 @@ async function failIngestionRun(
   }
 }
 
+export async function verifiedExistingProducts(
+  supabase: SupabaseClient,
+  records: CleanMarketRecord[],
+  expected: ReadonlyMap<string, number>,
+): Promise<Map<string, number>> {
+  const names = [...new Set(records.map(r => normalizeText(r.product)))];
+  if (!names.length || names.length !== expected.size || names.some(n => !expected.has(n)) ||
+      [...expected.values()].some(id => !Number.isSafeInteger(id) || id <= 0) ||
+      new Set(expected.values()).size !== expected.size) {
+    throw new Error('STRICT_PRODUCT_MAPPING_MISMATCH');
+  }
+  const { data, error } = await supabase.from('products').select('id,name,is_active').in('id', [...expected.values()]);
+  if (error || !data || data.length !== names.length ||
+      data.some(r => expected.get(r.name) !== r.id || r.is_active !== true)) {
+    throw new Error('STRICT_EXISTING_PRODUCTS_CHANGED');
+  }
+  return new Map(expected);
+}
+
 export async function importRecords(
   supabase: SupabaseClient,
   records: CleanMarketRecord[],
@@ -1269,6 +1310,11 @@ export async function importRecords(
         `the ${records.length} canonical records being imported.`,
     );
   }
+
+  // Resolve strict catalogue identity before starting an ingestion run or any write.
+  const strictProductIds = options.existingProductIds
+    ? await verifiedExistingProducts(supabase, records, options.existingProductIds)
+    : undefined;
 
   const marketId =
     await getExistingMarket(
@@ -1322,7 +1368,7 @@ export async function importRecords(
         ),
       );
 
-    const productIds =
+    const productIds = strictProductIds ??
       await upsertProducts(
         supabase,
         productNames,
