@@ -2,6 +2,16 @@ name: Tshwane collection and guarded import
 
 on:
   workflow_dispatch:
+    inputs:
+      archive_run_id:
+        description: Existing Tshwane collection run ID (blank collects fresh source)
+        type: string
+      archive_name:
+        description: Exact Tshwane source artifact name for that run
+        type: string
+      partial_manifest_sha256:
+        description: Reviewed manifest SHA-256 for an explicitly accepted partial archive
+        type: string
   schedule:
     # UTC: 13:23 and 18:23 SAST. Publication dates always come from the source.
     - cron: '23 11 * * *'
@@ -9,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: tshwane-market-collection
@@ -16,7 +27,7 @@ concurrency:
 
 jobs:
   archive-source:
-    name: Collect, validate, archive and import accepted publication
+    name: Validate source archive and publish if enabled
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -29,24 +40,53 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Test archive import guards
-        run: npx playwright test tests/archive-import-bridge.spec.ts tests/johannesburg-reviewed-mappings.spec.ts tests/supabase-importer.spec.ts --project=chromium --reporter=line
-      - name: Preserve the current public source publication
-        run: npx tsx scripts/collect-tshwane-only.ts --collect-public --timeout-ms=9000000 --output-root=scraper-diagnostics/collection-only
-      - name: Validate Tshwane import bridge (dry run)
+      - name: Test Tshwane archive import guards
+        run: npx playwright test tests/tshwane-publication.spec.ts tests/archive-import-bridge.spec.ts tests/supabase-importer.spec.ts --project=chromium --reporter=line
+      - name: Validate replay inputs
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: npx tsx scripts/tshwane-archive-import.ts
-      - name: Import accepted Tshwane publication into production
-        if: ${{ vars.MARKETPULSE_ENABLE_TSHWANE_IMPORT == 'true' }}
+          RUN_ID: ${{ inputs.archive_run_id }}
+          ARCHIVE_NAME: ${{ inputs.archive_name }}
+          PARTIAL_SHA: ${{ inputs.partial_manifest_sha256 }}
+        run: |
+          if [[ -n "$RUN_ID" ]]; then
+            [[ "$RUN_ID" =~ ^[0-9]+$ && "$ARCHIVE_NAME" =~ ^tshwane-source-${RUN_ID}-[0-9]+$ ]]
+            [[ -z "$PARTIAL_SHA" || "$PARTIAL_SHA" =~ ^[0-9a-f]{64}$ ]]
+          else
+            [[ -z "$ARCHIVE_NAME" && -z "$PARTIAL_SHA" ]]
+          fi
+      - name: Download preserved Tshwane archive
+        if: ${{ inputs.archive_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.archive_run_id }}
+          name: ${{ inputs.archive_name }}
+          path: scraper-diagnostics/collection-only
+      - name: Install Chromium for fresh collection
+        if: ${{ inputs.archive_run_id == '' }}
+        run: npx playwright install --with-deps chromium
+      - name: Preserve the current public source publication
+        if: ${{ inputs.archive_run_id == '' }}
+        run: npx tsx scripts/collect-tshwane-only.ts --collect-public --timeout-ms=9000000 --output-root=scraper-diagnostics/collection-only
+      - name: Validate Tshwane publication offline
+        env:
+          PARTIAL_SHA: ${{ inputs.partial_manifest_sha256 }}
+        run: |
+          args=()
+          if [[ -n "$PARTIAL_SHA" ]]; then args+=("--approve-partial-manifest-sha256=$PARTIAL_SHA"); fi
+          npx tsx scripts/tshwane-archive-import.ts "${args[@]}"
+      - name: Publish Tshwane archive and verify Supabase read-back
+        if: ${{ github.ref == 'refs/heads/main' && vars.MARKETPULSE_ENABLE_TSHWANE_IMPORT == 'true' && (inputs.partial_manifest_sha256 == '' || vars.MARKETPULSE_ENABLE_TSHWANE_PARTIAL_IMPORT == 'true') }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           MARKETPULSE_ENABLE_TSHWANE_IMPORT: 'true'
-        run: npx tsx scripts/tshwane-archive-import.ts --commit
+          MARKETPULSE_ENABLE_TSHWANE_PARTIAL_IMPORT: ${{ vars.MARKETPULSE_ENABLE_TSHWANE_PARTIAL_IMPORT }}
+          PARTIAL_SHA: ${{ inputs.partial_manifest_sha256 }}
+        run: |
+          args=()
+          if [[ -n "$PARTIAL_SHA" ]]; then args+=("--approve-partial-manifest-sha256=$PARTIAL_SHA"); fi
+          npx tsx scripts/tshwane-archive-import.ts --commit "${args[@]}"
       - name: Upload source evidence even if validation fails
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
